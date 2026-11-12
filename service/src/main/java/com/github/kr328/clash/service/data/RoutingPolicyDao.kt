@@ -14,6 +14,10 @@ interface RoutingPolicyDao {
     @Query("SELECT * FROM routing_policies WHERE id = :id")
     suspend fun queryById(id: String): RoutingPolicy?
 
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(policies: List<RoutingPolicy>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(policy: RoutingPolicy)
 
