@@ -26,7 +26,7 @@ data class NodeGroup(
     @ColumnInfo(name = "mode") val mode: String,
     @ColumnInfo(name = "nameTag") val nameTag: String? = null,
     @ColumnInfo(name = "regionCode") val regionCode: String? = null,
-    @ColumnInfo(name = "iconMode") val iconMode: String = StrategyGroup.ICON_AUTO,
+    @ColumnInfo(name = "iconMode", defaultValue = "'AUTO'") val iconMode: String = StrategyGroup.ICON_AUTO,
     @ColumnInfo(name = "iconType") val iconType: String? = null,
     @ColumnInfo(name = "iconValue") val iconValue: String? = null,
     @ColumnInfo(name = "enabled") val enabled: Boolean = true,
