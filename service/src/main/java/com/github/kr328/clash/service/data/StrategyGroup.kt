@@ -2,6 +2,7 @@ package com.github.kr328.clash.service.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
@@ -43,7 +44,15 @@ data class StrategyGroup(
 @Entity(
     tableName = "strategy_group_members",
     primaryKeys = ["groupId", "memberType", "memberId"],
-    indices = [Index(value = ["groupId", "position"]), Index(value = ["memberType", "memberId"])]
+    indices = [Index(value = ["groupId", "position"]), Index(value = ["memberType", "memberId"])],
+    foreignKeys = [
+        ForeignKey(
+            entity = StrategyGroup::class,
+            parentColumns = ["id"],
+            childColumns = ["groupId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
 )
 data class StrategyGroupMember(
     @ColumnInfo(name = "groupId") val groupId: String,
