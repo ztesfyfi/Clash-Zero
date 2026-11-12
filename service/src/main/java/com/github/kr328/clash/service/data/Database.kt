@@ -12,8 +12,8 @@ import java.lang.ref.SoftReference
 import androidx.room.Database as DB
 
 @DB(
-    version = 5,
-    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class],
+    version = 6,
+    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class, RuleSet::class],
     exportSchema = false,
 )
 abstract class Database : RoomDatabase() {
@@ -23,6 +23,7 @@ abstract class Database : RoomDatabase() {
     abstract fun openNodeGroupDao(): NodeGroupDao
     abstract fun openStrategyGroupDao(): StrategyGroupDao
     abstract fun openRoutingPolicyDao(): RoutingPolicyDao
+    abstract fun openRuleSetDao(): RuleSetDao
 
     companion object {
         val database: Database
