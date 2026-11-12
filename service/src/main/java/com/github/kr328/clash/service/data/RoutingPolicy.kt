@@ -27,6 +27,17 @@ data class RoutingPolicy(
     @ColumnInfo(name = "createdAt") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updatedAt") val updatedAt: Long = System.currentTimeMillis(),
 ) {
+    fun resolvedIcon(): IconSpec? {
+        if (iconMode == StrategyGroup.ICON_MANUAL) {
+            return if (!iconType.isNullOrBlank() && !iconValue.isNullOrBlank()) {
+                IconSpec(iconType, iconValue)
+            } else {
+                null
+            }
+        }
+        return IconAutoMatcher.match(name)
+    }
+
     companion object {
         const val TARGET_STRATEGY_GROUP = "STRATEGY_GROUP"
         const val TARGET_DIRECT = "DIRECT"
