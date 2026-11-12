@@ -79,7 +79,7 @@ object DefaultRoutingPreset {
             listOf("facebook", "instagram", "twitter", "discord")
                 .forEach { add("preset-policy-social", PolicyCondition.GEOSITE, it) }
             add("preset-policy-games", PolicyCondition.GEOSITE, "category-games")
-            add("preset-policy-ads", PolicyCondition.GEOSITE, "category-ads")
+            add("preset-policy-ads", PolicyCondition.GEOSITE, "category-ads-all")
             add("preset-policy-cn-domain", PolicyCondition.GEOSITE, "cn")
             add("preset-policy-cn-ip", PolicyCondition.GEOIP, "cn")
 
