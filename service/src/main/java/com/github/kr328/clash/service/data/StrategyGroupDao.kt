@@ -14,6 +14,10 @@ interface StrategyGroupDao {
     @Query("SELECT * FROM strategy_groups WHERE id = :id")
     suspend fun queryById(id: String): StrategyGroup?
 
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(groups: List<StrategyGroup>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(group: StrategyGroup)
 
