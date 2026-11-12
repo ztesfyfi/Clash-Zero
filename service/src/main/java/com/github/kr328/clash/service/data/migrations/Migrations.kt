@@ -53,10 +53,92 @@ private val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+private val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE node_groups ADD COLUMN iconMode TEXT NOT NULL DEFAULT 'AUTO'")
+
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_groups (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                iconMode TEXT NOT NULL,
+                iconType TEXT,
+                iconValue TEXT,
+                sortOrder INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_strategy_groups_sortOrder ON strategy_groups(sortOrder)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_strategy_groups_enabled ON strategy_groups(enabled)")
+
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_group_members (
+                groupId TEXT NOT NULL,
+                memberType TEXT NOT NULL,
+                memberId TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                PRIMARY KEY(groupId, memberType, memberId),
+                FOREIGN KEY(groupId) REFERENCES strategy_groups(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_strategy_group_members_groupId_position ON strategy_group_members(groupId, position)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_strategy_group_members_memberType_memberId ON strategy_group_members(memberType, memberId)")
+
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS routing_policies (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                targetType TEXT NOT NULL,
+                targetId TEXT,
+                matchMode TEXT NOT NULL,
+                iconMode TEXT NOT NULL,
+                iconType TEXT,
+                iconValue TEXT,
+                priority INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_routing_policies_priority ON routing_policies(priority)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_routing_policies_enabled ON routing_policies(enabled)")
+
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS policy_conditions (
+                id TEXT NOT NULL,
+                policyId TEXT NOT NULL,
+                conditionGroup TEXT NOT NULL,
+                groupMode TEXT NOT NULL,
+                matcherType TEXT NOT NULL,
+                matcherValue TEXT NOT NULL,
+                negated INTEGER NOT NULL,
+                PRIMARY KEY(id),
+                FOREIGN KEY(policyId) REFERENCES routing_policies(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_policy_conditions_policyId_conditionGroup ON policy_conditions(policyId, conditionGroup)")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
     MIGRATION_3_4,
+    MIGRATION_4_5,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
+
