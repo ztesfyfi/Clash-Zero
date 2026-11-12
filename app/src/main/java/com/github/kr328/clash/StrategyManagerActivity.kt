@@ -248,6 +248,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                 StrategyGroup.MODE_LOAD_BALANCE -> 3
                 else -> 0
             })
+            val checks = linkedMapOf<String, CheckBox>()
             val form = LinearLayout(this@StrategyManagerActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(24), dp(8), dp(24), 0)
@@ -261,7 +262,6 @@ class StrategyManagerActivity : AppCompatActivity() {
                     setPadding(0, dp(4), 0, dp(8))
                 })
                 val appList = LinearLayout(this@StrategyManagerActivity).apply { orientation = LinearLayout.VERTICAL }
-                val checks = linkedMapOf<String, CheckBox>()
                 apps.forEach { app ->
                     val check = CheckBox(this@StrategyManagerActivity).apply {
                         text = app.label
@@ -285,7 +285,6 @@ class StrategyManagerActivity : AppCompatActivity() {
                 memberButton.setOnClickListener {
                     manageStrategyGroupMembers(existing!!)
                 }
-                tag = checks
             }
             val dialog = AlertDialog.Builder(this@StrategyManagerActivity)
                 .setTitle(if (existing == null) "新建策略组" else "编辑：${existing.name}")
