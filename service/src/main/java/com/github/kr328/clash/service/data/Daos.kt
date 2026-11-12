@@ -15,3 +15,11 @@ fun SelectionDao(): SelectionDao {
 fun NodeGroupDao(): NodeGroupDao {
     return Database.database.openNodeGroupDao()
 }
+
+fun StrategyGroupDao(): StrategyGroupDao {
+    return Database.database.openStrategyGroupDao()
+}
+
+fun RoutingPolicyDao(): RoutingPolicyDao {
+    return Database.database.openRoutingPolicyDao()
+}
