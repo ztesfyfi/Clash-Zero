@@ -23,6 +23,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.coordinator)
     implementation(libs.androidx.recyclerview)
+    // StrategyManagerActivity directly accesses the Room-backed service database.
+    implementation(libs.androidx.room.runtime)
     implementation(libs.google.material)
     implementation(libs.quickie.bundled)
     implementation(libs.androidx.activity.ktx)
