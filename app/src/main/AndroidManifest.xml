@@ -113,6 +113,11 @@
             android:label="@string/application_crashed"
             android:launchMode="singleTask" />
         <activity
+            android:name=".StrategyManagerActivity"
+            android:configChanges="uiMode"
+            android:exported="false"
+            android:label="策略管理" />
+        <activity
             android:name=".ProfilesActivity"
             android:configChanges="uiMode"
             android:exported="false"
