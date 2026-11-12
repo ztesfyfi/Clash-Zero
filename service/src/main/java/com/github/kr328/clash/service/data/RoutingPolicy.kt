@@ -2,6 +2,7 @@ package com.github.kr328.clash.service.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
@@ -41,7 +42,15 @@ data class RoutingPolicy(
  */
 @Entity(
     tableName = "policy_conditions",
-    indices = [Index(value = ["policyId", "conditionGroup"])]
+    indices = [Index(value = ["policyId", "conditionGroup"])],
+    foreignKeys = [
+        ForeignKey(
+            entity = RoutingPolicy::class,
+            parentColumns = ["id"],
+            childColumns = ["policyId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ]
 )
 data class PolicyCondition(
     @PrimaryKey
