@@ -27,6 +27,7 @@ object IconAutoMatcher {
         Entry(listOf("ai", "人工智能"), IconSpec.TYPE_EMOJI, "🤖"),
         Entry(listOf("game", "游戏", "steam"), IconSpec.TYPE_EMOJI, "🎮"),
         Entry(listOf("media", "streaming", "流媒体", "影音"), IconSpec.TYPE_EMOJI, "🎬"),
+        Entry(listOf("social", "社交"), IconSpec.TYPE_EMOJI, "💬"),
         Entry(listOf("auto", "自动选择", "自动测速"), IconSpec.TYPE_EMOJI, "⚡"),
         Entry(listOf("fallback", "故障转移"), IconSpec.TYPE_EMOJI, "🔄"),
         Entry(listOf("balance", "负载均衡"), IconSpec.TYPE_EMOJI, "⚖️"),
