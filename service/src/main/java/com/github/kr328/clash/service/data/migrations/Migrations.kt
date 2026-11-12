@@ -133,12 +133,38 @@ private val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+private val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS rule_sets (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                sourceType TEXT NOT NULL,
+                sourceValue TEXT NOT NULL,
+                format TEXT NOT NULL,
+                updateInterval INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+            """.trimIndent()
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_rule_sets_kind ON rule_sets(kind)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_rule_sets_sourceType ON rule_sets(sourceType)")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
     MIGRATION_3_4,
     MIGRATION_4_5,
+    MIGRATION_5_6,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
+
 
