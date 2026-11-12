@@ -283,7 +283,6 @@ class StrategyManagerActivity : AppCompatActivity() {
                 }
                 addView(memberButton)
                 memberButton.setOnClickListener {
-                    (form.parent as? View)?.let { _ -> }
                     manageStrategyGroupMembers(existing!!)
                 }
                 tag = checks
@@ -346,19 +345,19 @@ class StrategyManagerActivity : AppCompatActivity() {
     ) {
         val dao = database.openRoutingPolicyDao()
         val allPolicies = dao.queryAll()
-        val packageConditions = allPolicies.associateWith { policy ->
-            dao.queryConditions(policy.id).filter {
-                it.matcherType == PolicyCondition.PROCESS_PACKAGE
-            }
+        val allConditions = allPolicies.associateWith { policy ->
+            dao.queryConditions(policy.id)
         }
 
         apps.forEachIndexed { index, app ->
-            val matching = packageConditions.filterValues { conditions ->
-                conditions.any { it.matcherValue == app.packageName }
+            val matching = allConditions.filterValues { conditions ->
+                conditions.any {
+                    it.matcherType == PolicyCondition.PROCESS_PACKAGE && it.matcherValue == app.packageName
+                }
             }
             if (app.packageName in selectedPackages) {
                 val reusable = matching.entries.firstOrNull { (_, conditions) ->
-                    conditions.size == 1
+                    conditions.size == 1 && conditions.single().matcherType == PolicyCondition.PROCESS_PACKAGE
                 }
                 if (reusable != null) {
                     val old = reusable.key
@@ -472,12 +471,15 @@ class StrategyManagerActivity : AppCompatActivity() {
             val matcherValue = edit("匹配值（如 youtube、cn、example.com 或应用包名）")
             val target = spinner(targetOptions(groups))
             val priority = edit("优先级（数字越小越先匹配）").apply { setText((database.openRoutingPolicyDao().queryAll().size * 10).toString()) }
-            val form = formView(
-                listOf("策略名称", "匹配类型", "匹配值", "流量目标", "优先级"),
-                listOf(name, matcherValue, priority),
-                matcherType,
-                target
-            )
+            val form = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(24), dp(8), dp(24), 0)
+                addView(label("策略名称")); addView(name)
+                addView(label("匹配类型")); addView(matcherType)
+                addView(label("匹配值")); addView(matcherValue)
+                addView(label("流量目标")); addView(target)
+                addView(label("优先级")); addView(priority)
+            }
             AlertDialog.Builder(this@StrategyManagerActivity).setTitle("新建策略").setView(form)
                 .setNegativeButton("取消", null)
                 .setPositiveButton("保存") { _, _ ->
@@ -530,10 +532,27 @@ class StrategyManagerActivity : AppCompatActivity() {
                 textSize = 13f
                 setPadding(0, dp(8), 0, dp(8))
             }
-            val form = formView(listOf("策略名称", "流量目标", "优先级", "当前匹配条件"), listOf(name, priority), target, detail)
+            val form = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(24), dp(8), dp(24), 0)
+                addView(label("策略名称")); addView(name)
+                addView(label("流量目标")); addView(target)
+                addView(label("优先级")); addView(priority)
+                addView(label("当前匹配条件")); addView(detail)
+            }
             val dialog = AlertDialog.Builder(this@StrategyManagerActivity).setTitle("编辑策略：${policy.name}")
                 .setView(form)
-                .setNegativeButton("取消", null)
+                .setNegativeButton("删除") { _, _ ->
+                    AlertDialog.Builder(this@StrategyManagerActivity)
+                        .setMessage("确定删除策略“${policy.name}”？")
+                        .setNegativeButton("取消", null)
+                        .setPositiveButton("删除") { _, _ ->
+                            scope.launch {
+                                database.openRoutingPolicyDao().delete(policy.id)
+                                refresh()
+                            }
+                        }.show()
+                }
                 .setNeutralButton(if (policy.enabled) "停用" else "启用") { _, _ ->
                     scope.launch {
                         database.openRoutingPolicyDao().setEnabled(policy.id, !policy.enabled)
@@ -559,20 +578,6 @@ class StrategyManagerActivity : AppCompatActivity() {
                         }
                     }
                 }.create()
-            dialog.setOnShowListener {
-                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnLongClickListener {
-                    AlertDialog.Builder(this@StrategyManagerActivity)
-                        .setMessage("确定删除策略“${policy.name}”？")
-                        .setNegativeButton("取消", null)
-                        .setPositiveButton("删除") { _, _ ->
-                            scope.launch {
-                                database.openRoutingPolicyDao().delete(policy.id)
-                                refresh()
-                            }
-                        }.show()
-                    true
-                }
-            }
             dialog.show()
         }
     }
