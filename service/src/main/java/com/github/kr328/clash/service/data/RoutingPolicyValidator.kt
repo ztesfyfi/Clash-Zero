@@ -40,6 +40,7 @@ object RoutingPolicyValidator {
                 PolicyCondition.DOMAIN,
                 PolicyCondition.DOMAIN_SUFFIX,
                 PolicyCondition.DOMAIN_KEYWORD -> Unit
+                PolicyCondition.IP -> Unit
                 PolicyCondition.IP_CIDR -> {
                     if (!condition.matcherValue.contains('/')) {
                         return "IP network must use CIDR notation"
