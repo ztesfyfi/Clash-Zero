@@ -26,6 +26,8 @@ data class NodeGroup(
     @ColumnInfo(name = "mode") val mode: String,
     @ColumnInfo(name = "nameTag") val nameTag: String? = null,
     @ColumnInfo(name = "regionCode") val regionCode: String? = null,
+    @ColumnInfo(name = "iconType") val iconType: String? = null,
+    @ColumnInfo(name = "iconValue") val iconValue: String? = null,
     @ColumnInfo(name = "enabled") val enabled: Boolean = true,
     @ColumnInfo(name = "createdAt") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updatedAt") val updatedAt: Long = System.currentTimeMillis(),
@@ -34,6 +36,15 @@ data class NodeGroup(
         const val MODE_STATIC = "STATIC"
         const val MODE_NAME = "NAME"
         const val MODE_NAME_REGION = "NAME_REGION"
+    }
+
+    /** A custom icon wins; otherwise region groups can show their flag. */
+    fun resolvedIcon(): IconSpec? {
+        if (!iconType.isNullOrBlank() && !iconValue.isNullOrBlank()) {
+            return IconSpec(iconType, iconValue)
+        }
+        val flag = regionCode?.let(RegionFlag::fromRegionCode)
+        return flag?.let { IconSpec(IconSpec.TYPE_EMOJI, it) }
     }
 }
 
