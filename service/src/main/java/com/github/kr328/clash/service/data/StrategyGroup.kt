@@ -25,6 +25,17 @@ data class StrategyGroup(
     @ColumnInfo(name = "createdAt") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updatedAt") val updatedAt: Long = System.currentTimeMillis(),
 ) {
+    fun resolvedIcon(): IconSpec? {
+        if (iconMode == ICON_MANUAL) {
+            return if (!iconType.isNullOrBlank() && !iconValue.isNullOrBlank()) {
+                IconSpec(iconType, iconValue)
+            } else {
+                null
+            }
+        }
+        return IconAutoMatcher.match(name)
+    }
+
     companion object {
         const val MODE_SELECT = "SELECT"
         const val MODE_URL_TEST = "URL_TEST"
