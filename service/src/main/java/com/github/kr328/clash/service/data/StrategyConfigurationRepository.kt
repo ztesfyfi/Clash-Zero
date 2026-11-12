@@ -16,6 +16,13 @@ class StrategyConfigurationRepository(
         require(members.all { it.groupId == group.id }) {
             "Every member must belong to the strategy group being saved"
         }
+        val memberKeys = members.map { it.memberType to it.memberId }
+        require(memberKeys.distinct().size == memberKeys.size) {
+            "A strategy group cannot contain the same member twice"
+        }
+        require(members.map { it.position }.distinct().size == members.size) {
+            "Strategy group member positions must be unique"
+        }
 
         val existingGroups = database.openStrategyGroupDao().queryAll()
         val allMembers = existingGroups.flatMap {
