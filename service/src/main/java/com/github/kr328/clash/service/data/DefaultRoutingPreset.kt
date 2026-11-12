@@ -25,18 +25,18 @@ object DefaultRoutingPreset {
         if (strategyDao.queryAll().isEmpty()) {
             strategyDao.upsertAll(
                 listOf(
-                    group(GROUP_AI, "AI 服务", "🤖", 0),
-                    group(GROUP_YOUTUBE, "YouTube", "▶️", 1),
-                    group(GROUP_STREAMING, "流媒体", "🎬", 2),
-                    group(GROUP_TELEGRAM, "Telegram", "telegram", 3, IconSpec.TYPE_BRAND),
-                    group(GROUP_SOCIAL, "社交媒体", "💬", 4),
-                    group(GROUP_GAMES, "游戏", "🎮", 5),
-                    group(GROUP_GLOBAL, "国外网站", "🌐", 6),
-                    group(GROUP_DIRECT, "国内直连", "🇨🇳", 7),
-                    group(GROUP_ADS, "广告拦截", "🚫", 8),
-                    group(GROUP_AUTO, "自动选择", "⚡", 9, mode = StrategyGroup.MODE_URL_TEST),
-                    group(GROUP_FALLBACK, "故障转移", "🔄", 10, mode = StrategyGroup.MODE_FALLBACK),
-                    group(GROUP_BALANCE, "负载均衡", "⚖️", 11, mode = StrategyGroup.MODE_LOAD_BALANCE),
+                    group(GROUP_AI, "AI 服务", 0),
+                    group(GROUP_YOUTUBE, "YouTube", 1),
+                    group(GROUP_STREAMING, "流媒体", 2),
+                    group(GROUP_TELEGRAM, "Telegram", 3),
+                    group(GROUP_SOCIAL, "社交媒体", 4),
+                    group(GROUP_GAMES, "游戏", 5),
+                    group(GROUP_GLOBAL, "国外网站", 6),
+                    group(GROUP_DIRECT, "国内直连", 7),
+                    group(GROUP_ADS, "广告拦截", 8),
+                    group(GROUP_AUTO, "自动选择", 9, mode = StrategyGroup.MODE_URL_TEST),
+                    group(GROUP_FALLBACK, "故障转移", 10, mode = StrategyGroup.MODE_FALLBACK),
+                    group(GROUP_BALANCE, "负载均衡", 11, mode = StrategyGroup.MODE_LOAD_BALANCE),
                 )
             )
         }
@@ -90,17 +90,13 @@ object DefaultRoutingPreset {
     private fun group(
         id: String,
         name: String,
-        icon: String,
         order: Int,
-        iconType: String = IconSpec.TYPE_EMOJI,
         mode: String = StrategyGroup.MODE_SELECT,
     ) = StrategyGroup(
         id = id,
         name = name,
         mode = mode,
-        iconMode = StrategyGroup.ICON_MANUAL,
-        iconType = iconType,
-        iconValue = icon,
+        iconMode = StrategyGroup.ICON_AUTO,
         sortOrder = order,
     )
 
