@@ -35,11 +35,16 @@ abstract class Database : RoomDatabase() {
         private var softDatabase: SoftReference<Database?> = SoftReference(null)
 
         private fun open(context: Context): Database {
-            return Room.databaseBuilder(
+            val database = Room.databaseBuilder(
                 context.applicationContext,
                 Database::class.java,
                 "profiles"
             ).addMigrations(*MIGRATIONS).build()
+
+            Global.launch(Dispatchers.IO) {
+                runCatching { DefaultRoutingPreset.installIfEmpty(database) }
+            }
+            return database
         }
 
         init {
