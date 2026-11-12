@@ -41,7 +41,6 @@ data class RoutingPolicy(
  */
 @Entity(
     tableName = "policy_conditions",
-    primaryKeys = ["id"],
     indices = [Index(value = ["policyId", "conditionGroup"])]
 )
 data class PolicyCondition(
