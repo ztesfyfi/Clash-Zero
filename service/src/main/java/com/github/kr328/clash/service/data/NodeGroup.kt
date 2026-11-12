@@ -2,7 +2,10 @@ package com.github.kr328.clash.service.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.PrimaryKey
+import androidx.room.TypeConverters
 import java.util.UUID
 
 /**
@@ -17,6 +20,7 @@ import java.util.UUID
     indices = [Index(value = ["mode"]), Index(value = ["nameTag"])]
 )
 data class NodeGroup(
+    @PrimaryKey
     @ColumnInfo(name = "id") val id: String = UUID.randomUUID().toString(),
     @ColumnInfo(name = "name") val name: String,
     @ColumnInfo(name = "mode") val mode: String,
@@ -44,21 +48,21 @@ data class NodeGroup(
     primaryKeys = ["groupId", "profileUuid", "proxyKey"],
     indices = [Index(value = ["profileUuid"])],
     foreignKeys = [
-        androidx.room.ForeignKey(
+        ForeignKey(
             entity = NodeGroup::class,
             parentColumns = ["id"],
             childColumns = ["groupId"],
-            onDelete = androidx.room.ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE
         ),
-        androidx.room.ForeignKey(
+        ForeignKey(
             entity = Imported::class,
             parentColumns = ["uuid"],
             childColumns = ["profileUuid"],
-            onDelete = androidx.room.ForeignKey.CASCADE
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )
-@androidx.room.TypeConverters(Converters::class)
+@TypeConverters(Converters::class)
 data class NodeGroupMember(
     @ColumnInfo(name = "groupId") val groupId: String,
     @ColumnInfo(name = "profileUuid") val profileUuid: UUID,
