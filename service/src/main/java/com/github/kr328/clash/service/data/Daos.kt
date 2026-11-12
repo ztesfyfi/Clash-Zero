@@ -23,3 +23,7 @@ fun StrategyGroupDao(): StrategyGroupDao {
 fun RoutingPolicyDao(): RoutingPolicyDao {
     return Database.database.openRoutingPolicyDao()
 }
+
+fun RuleSetDao(): RuleSetDao {
+    return Database.database.openRuleSetDao()
+}
