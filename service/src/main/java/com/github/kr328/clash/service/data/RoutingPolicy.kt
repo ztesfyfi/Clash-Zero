@@ -80,6 +80,7 @@ data class PolicyCondition(
         const val DOMAIN = "DOMAIN"
         const val DOMAIN_SUFFIX = "DOMAIN_SUFFIX"
         const val DOMAIN_KEYWORD = "DOMAIN_KEYWORD"
+        const val IP = "IP"
         const val IP_CIDR = "IP_CIDR"
         const val GEOIP = "GEOIP"
         const val GEOSITE = "GEOSITE"
