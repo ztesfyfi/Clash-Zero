@@ -77,7 +77,7 @@ subprojects {
             if (!isApp) {
                 consumerProguardFiles("consumer-rules.pro")
             } else {
-                setProperty("archivesBaseName", "cmfa-$versionName")
+                setProperty("archivesBaseName", "clash-zero-$versionName")
             }
         }
 
@@ -101,9 +101,7 @@ subprojects {
             create("alpha") {
                 isDefault = true
                 dimension = flavorDimensionList[0]
-                if (!removeSuffix) {
-                    versionNameSuffix = ".Alpha"
-                }
+                // Clash Zero test builds use the clean product version name.
 
 
                 buildConfigField("boolean", "PREMIUM", "Boolean.parseBoolean(\"false\")")
@@ -111,9 +109,7 @@ subprojects {
                 resValue("string", "launch_name", "@string/launch_name_alpha")
                 resValue("string", "application_name", "@string/application_name_alpha")
 
-                if (isApp && !removeSuffix) {
-                    applicationIdSuffix = ".alpha"
-                }
+                // Keep a stable Clash Zero application ID for test upgrades.
             }
 
             create("meta") {
