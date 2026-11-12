@@ -26,6 +26,7 @@ data class NodeGroup(
     @ColumnInfo(name = "mode") val mode: String,
     @ColumnInfo(name = "nameTag") val nameTag: String? = null,
     @ColumnInfo(name = "regionCode") val regionCode: String? = null,
+    @ColumnInfo(name = "iconMode") val iconMode: String = StrategyGroup.ICON_AUTO,
     @ColumnInfo(name = "iconType") val iconType: String? = null,
     @ColumnInfo(name = "iconValue") val iconValue: String? = null,
     @ColumnInfo(name = "enabled") val enabled: Boolean = true,
@@ -38,13 +39,24 @@ data class NodeGroup(
         const val MODE_NAME_REGION = "NAME_REGION"
     }
 
-    /** A custom icon wins; otherwise region groups can show their flag. */
+    /** Manual icons are stable; automatic region groups use their verified region flag. */
     fun resolvedIcon(): IconSpec? {
-        if (!iconType.isNullOrBlank() && !iconValue.isNullOrBlank()) {
-            return IconSpec(iconType, iconValue)
+        if (iconMode == StrategyGroup.ICON_MANUAL) {
+            return if (!iconType.isNullOrBlank() && !iconValue.isNullOrBlank()) {
+                IconSpec(iconType, iconValue)
+            } else {
+                null
+            }
         }
-        val flag = regionCode?.let(RegionFlag::fromRegionCode)
-        return flag?.let { IconSpec(IconSpec.TYPE_EMOJI, it) }
+        if (mode == MODE_NAME_REGION) {
+            regionCode?.let(RegionFlag::fromRegionCode)?.let {
+                return IconSpec(IconSpec.TYPE_EMOJI, it)
+            }
+        }
+        return IconAutoMatcher.match(name)
+            ?: regionCode?.let(RegionFlag::fromRegionCode)?.let {
+                IconSpec(IconSpec.TYPE_EMOJI, it)
+            }
     }
 }
 
