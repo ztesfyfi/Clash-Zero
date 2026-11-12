@@ -47,7 +47,7 @@ subprojects {
         defaultConfig {
             if (isApp) {
                 val customApplicationId = queryConfigProperty("custom.application.id") as? String?
-                applicationId = customApplicationId.takeIf { it?.isNotBlank() == true } ?: "com.github.metacubex.clash"
+                applicationId = customApplicationId.takeIf { it?.isNotBlank() == true } ?: "com.ztesfyfi.clashzero"
             }
 
             project.name.let { name ->
@@ -58,8 +58,8 @@ subprojects {
             minSdk = 21
             targetSdk = 35
 
-            versionName = "2.11.37"
-            versionCode = 211037
+            versionName = "2.0-beta1"
+            versionCode = 211038
 
             resValue("string", "release_name", "v$versionName")
             resValue("integer", "release_code", "$versionCode")
