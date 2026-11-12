@@ -313,7 +313,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     scope.launch {
                         try {
                             database.openStrategyGroupDao().upsert(saved)
-                            if (existing != null) syncAppAssignments(saved, apps, chosen)
+                            syncAppAssignments(saved, apps, chosen)
                             toast("策略组已保存")
                             refresh()
                         } catch (error: Exception) {
