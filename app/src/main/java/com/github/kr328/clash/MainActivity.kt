@@ -62,6 +62,12 @@ class MainActivity : BaseActivity<MainDesign>() {
                             startActivity(ProxyActivity::class.intent)
                         MainDesign.Request.OpenProfiles ->
                             startActivity(ProfilesActivity::class.intent)
+                        MainDesign.Request.OpenNodeGroups ->
+                            startActivity(StrategyManagerActivity::class.intent.putExtra(StrategyManagerActivity.EXTRA_SECTION, StrategyManagerActivity.SECTION_NODE_GROUPS))
+                        MainDesign.Request.OpenStrategyGroups ->
+                            startActivity(StrategyManagerActivity::class.intent.putExtra(StrategyManagerActivity.EXTRA_SECTION, StrategyManagerActivity.SECTION_STRATEGY_GROUPS))
+                        MainDesign.Request.OpenRoutingPolicies ->
+                            startActivity(StrategyManagerActivity::class.intent.putExtra(StrategyManagerActivity.EXTRA_SECTION, StrategyManagerActivity.SECTION_POLICIES))
                         MainDesign.Request.OpenProviders ->
                             startActivity(ProvidersActivity::class.intent)
                         MainDesign.Request.OpenLogs -> {
