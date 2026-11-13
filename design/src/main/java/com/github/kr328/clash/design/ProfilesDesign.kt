@@ -143,6 +143,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         requests.trySend(Request.Active(profile))
     }
 
+    fun requestActive(dialog: Dialog, profile: Profile) {
+        requests.trySend(Request.Active(profile))
+        dialog.dismiss()
+    }
+
     fun requestUpdate(dialog: Dialog, profile: Profile) {
         requests.trySend(Request.Update(profile))
 
