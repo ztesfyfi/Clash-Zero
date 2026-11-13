@@ -115,8 +115,8 @@
                     android:layout_marginVertical="@dimen/main_card_margin_vertical"
                     android:onClick="@{() -> self.request(Request.OpenNodeGroups)}"
                     app:icon="@drawable/ic_baseline_apps"
-                    app:subtext="手动分组、名称关联、地区动态分组"
-                    app:text="节点组" />
+                    app:subtext="静态节点组、动态节点组、条件组合"
+                    app:text="出站节点" />
 
                 <com.github.kr328.clash.design.view.LargeActionCard
                     android:layout_width="match_parent"
@@ -124,8 +124,8 @@
                     android:layout_marginVertical="@dimen/main_card_margin_vertical"
                     android:onClick="@{() -> self.request(Request.OpenStrategyGroups)}"
                     app:icon="@drawable/ic_baseline_swap_vertical_circle"
-                    app:subtext="手动选择、自动测速、故障转移、负载均衡"
-                    app:text="策略组" />
+                    app:subtext="手动选择、自动择优、故障转移、负载均衡"
+                    app:text="代理策略" />
 
                 <com.github.kr328.clash.design.view.LargeActionCard
                     android:layout_width="match_parent"
@@ -133,8 +133,8 @@
                     android:layout_marginVertical="@dimen/main_card_margin_vertical"
                     android:onClick="@{() -> self.request(Request.OpenRoutingPolicies)}"
                     app:icon="@drawable/ic_baseline_assignment"
-                    app:subtext="按应用、域名、IP、地区设置流量去向"
-                    app:text="策略" />
+                    app:subtext="按域名、IP、规则集设置流量出口"
+                    app:text="目标分流" />
 
                 <com.github.kr328.clash.design.view.LargeActionLabel
                     android:layout_width="match_parent"
