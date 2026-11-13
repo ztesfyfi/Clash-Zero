@@ -26,7 +26,7 @@
             android:onClick="@{() -> master.requestActive(self, profile)}"
             android:padding="@dimen/bottom_sheet_menu_items_padding"
             android:visibility="@{profile.imported ? View.VISIBLE : View.GONE}"
-            app:icon="@drawable/ic_baseline_check"
+            app:icon="@drawable/ic_outline_check_circle"
             app:text="设为当前订阅" />
 
 
