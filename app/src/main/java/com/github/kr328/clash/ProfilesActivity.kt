@@ -86,9 +86,9 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             }
                         }
                         is ProfilesDesign.Request.SetDelayThresholds -> withContext(Dispatchers.IO) {
-                            Database.database.openProfileNodeDao().upsertSettings(
-                                ProfileNodeSettings(goodThresholdMs = it.good, slowThresholdMs = it.slow)
-                            )
+                            val dao = Database.database.openProfileNodeDao()
+                            val old = dao.querySettings() ?: ProfileNodeSettings(presetsInitialized = true)
+                            dao.upsertSettings(old.copy(goodThresholdMs = it.good, slowThresholdMs = it.slow))
                             design.fetch()
                             design.showNodeGroupManager()
                         }
@@ -201,23 +201,28 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
     private suspend fun ProfilesDesign.fetch() {
         val profiles = withProfile { queryAll() }
         val dao = Database.database.openProfileNodeDao()
-        val settings = withContext(Dispatchers.IO) { dao.querySettings() ?: ProfileNodeSettings() }
-        val groups = withContext(Dispatchers.IO) {
-            dao.insertGroups(
-                listOf(
-                    ProfileNodeGroup("region-us", "美国", true, sortOrder = 10),
-                    ProfileNodeGroup("region-jp", "日本", true, sortOrder = 20),
-                    ProfileNodeGroup("region-sg", "新加坡", true, sortOrder = 30),
-                    ProfileNodeGroup("region-hk", "香港", true, sortOrder = 40),
-                    ProfileNodeGroup("region-tw", "台湾", true, sortOrder = 50),
-                    ProfileNodeGroup("region-kr", "韩国", true, sortOrder = 60),
-                    ProfileNodeGroup("region-gb", "英国", true, sortOrder = 70),
-                    ProfileNodeGroup("region-de", "德国", true, sortOrder = 80),
-                    ProfileNodeGroup("region-other", "其他", true, sortOrder = 90),
+        val settings = withContext(Dispatchers.IO) {
+            val existing = dao.querySettings()
+            if (existing == null || !existing.presetsInitialized) {
+                dao.insertGroups(
+                    listOf(
+                        ProfileNodeGroup("region-us", "美国", true, sortOrder = 10),
+                        ProfileNodeGroup("region-jp", "日本", true, sortOrder = 20),
+                        ProfileNodeGroup("region-sg", "新加坡", true, sortOrder = 30),
+                        ProfileNodeGroup("region-hk", "香港", true, sortOrder = 40),
+                        ProfileNodeGroup("region-tw", "台湾", true, sortOrder = 50),
+                        ProfileNodeGroup("region-kr", "韩国", true, sortOrder = 60),
+                        ProfileNodeGroup("region-gb", "英国", true, sortOrder = 70),
+                        ProfileNodeGroup("region-de", "德国", true, sortOrder = 80),
+                        ProfileNodeGroup("region-other", "其他", true, sortOrder = 90),
+                    )
                 )
-            )
-            dao.queryGroups()
+                val initialized = (existing ?: ProfileNodeSettings()).copy(presetsInitialized = true)
+                dao.upsertSettings(initialized)
+                initialized
+            } else existing
         }
+        val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
         val groupById = groups.associateBy { it.id }
         val nodeMap = withContext(Dispatchers.IO) {
             profiles.filter { it.imported }.associate { profile ->
