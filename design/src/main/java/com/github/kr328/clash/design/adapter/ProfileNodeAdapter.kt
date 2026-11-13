@@ -1,6 +1,7 @@
 package com.github.kr328.clash.design.adapter
 
 import android.content.Context
+import android.graphics.Color
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.github.kr328.clash.design.databinding.AdapterProfileNodeBinding
@@ -25,6 +26,15 @@ class ProfileNodeAdapter(
     override fun onBindViewHolder(holder: Holder, position: Int) {
         val node = nodes[position]
         holder.binding.node = node
+        holder.binding.nodeStatus.text = node.delayText
+        holder.binding.nodeStatus.setTextColor(
+            when (node.delayState) {
+                "GOOD" -> Color.rgb(46, 125, 50)
+                "SLOW" -> Color.rgb(245, 158, 11)
+                "ERROR" -> Color.rgb(211, 47, 47)
+                else -> Color.GRAY
+            }
+        )
         holder.binding.setClicked { onClicked(node) }
     }
 
