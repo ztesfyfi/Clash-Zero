@@ -21,6 +21,7 @@ class ProfileAdapter(
     private val onMenuClicked: (Profile) -> Unit,
     private val onNodeClicked: (Profile, ProfileNodeItem) -> Unit,
     private val onManageGroups: () -> Unit,
+    private val onTestProfile: (Profile) -> Unit,
 ) : RecyclerView.Adapter<ProfileAdapter.Holder>() {
     class Holder(
         val binding: AdapterProfileBinding,
@@ -55,6 +56,10 @@ class ProfileAdapter(
         binding.nodeList.layoutManager = LinearLayoutManager(context)
         binding.nodeList.adapter = nodeAdapter
         binding.nodeSummary.setOnClickListener { onManageGroups() }
+        binding.nodeTest.setOnClickListener {
+            val position = holder.bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) onTestProfile(profiles[position])
+        }
         holder = Holder(binding, nodeAdapter)
         return holder
     }
@@ -74,7 +79,12 @@ class ProfileAdapter(
         val profileNodes = nodes[profile.uuid].orEmpty()
         binding.nodeSummary.visibility = if (stage == 0) View.GONE else View.VISIBLE
         binding.nodeList.visibility = if (stage == 2) View.VISIBLE else View.GONE
-        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：0 · 较慢：0 · 异常：0 · 未测试：${profileNodes.size} · 点击管理分组"
+        binding.nodeTest.visibility = if (stage == 1) View.VISIBLE else View.GONE
+        val good = profileNodes.count { it.delayState == "GOOD" }
+        val slow = profileNodes.count { it.delayState == "SLOW" }
+        val error = profileNodes.count { it.delayState == "ERROR" }
+        val untested = profileNodes.count { it.delayState == "UNTESTED" }
+        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 未测试：${untested} · 点击管理分组"
         holder.nodeAdapter.nodes = if (stage == 2) profileNodes else emptyList()
     }
 
