@@ -5,6 +5,7 @@ import "C"
 
 import (
 	"unsafe"
+	"time"
 
 	"cfa/native/app"
 	"cfa/native/tunnel"
@@ -108,4 +109,22 @@ func updateProvider(completable unsafe.Pointer, pType C.c_string, name C.c_strin
 //export suspend
 func suspend(suspended C.int) {
 	tunnel.Suspend(suspended != 0)
+}
+
+type proxyTestResult struct {
+	Delay int    `json:"delay"`
+	Error string `json:"error,omitempty"`
+}
+
+//export testProxy
+func testProxy(completable unsafe.Pointer, name C.c_string, url C.c_string, timeoutMs C.int) {
+	go func(name, url string, timeoutMs int, completable unsafe.Pointer) {
+		delay, err := tunnel.TestProxy(name, url, time.Duration(timeoutMs)*time.Millisecond)
+		result := proxyTestResult{Delay: delay}
+		if err != nil {
+			result.Error = err.Error()
+		}
+		C.complete(completable, marshalJson(result))
+		C.release_object(completable)
+	}(C.GoString(name), C.GoString(url), int(timeoutMs), completable)
 }
