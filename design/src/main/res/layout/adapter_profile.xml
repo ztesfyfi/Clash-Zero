@@ -154,6 +154,17 @@
             android:paddingBottom="8dp"
             android:textSize="12sp"
             android:visibility="gone" />
+        <TextView
+            android:id="@+id/node_test"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="18dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="8dp"
+            android:text="测速当前订阅"
+            android:textColor="?attr/colorPrimary"
+            android:visibility="gone" />
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/node_list"
             android:layout_width="match_parent"
