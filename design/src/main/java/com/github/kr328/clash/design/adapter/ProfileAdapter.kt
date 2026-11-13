@@ -47,14 +47,16 @@ class ProfileAdapter(
         val binding = AdapterProfileBinding
             .inflate(context.layoutInflater, parent, false)
             .also { it.currentTime = currentTime }
+        lateinit var holder: Holder
         val nodeAdapter = ProfileNodeAdapter(context) { node ->
-            val position = bindingAdapterPosition
+            val position = holder.bindingAdapterPosition
             if (position != RecyclerView.NO_POSITION) onNodeClicked(profiles[position], node)
         }
         binding.nodeList.layoutManager = LinearLayoutManager(context)
         binding.nodeList.adapter = nodeAdapter
         binding.nodeSummary.setOnClickListener { onManageGroups() }
-        return Holder(binding, nodeAdapter)
+        holder = Holder(binding, nodeAdapter)
+        return holder
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
