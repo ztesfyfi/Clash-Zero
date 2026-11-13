@@ -83,8 +83,9 @@ class ProfileAdapter(
         val good = profileNodes.count { it.delayState == "GOOD" }
         val slow = profileNodes.count { it.delayState == "SLOW" }
         val error = profileNodes.count { it.delayState == "ERROR" }
+        val tested = profileNodes.count { it.delayState == "TESTED" }
         val untested = profileNodes.count { it.delayState == "UNTESTED" }
-        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 未测试：${untested} · 点击管理分组"
+        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 已测速：${tested} · 未测试：${untested} · 点击管理分组"
         holder.nodeAdapter.nodes = if (stage == 2) profileNodes else emptyList()
     }
 
