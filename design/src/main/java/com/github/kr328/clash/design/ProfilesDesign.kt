@@ -60,7 +60,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private var nodeGroups: List<ProfileNodeGroupItem> = emptyList()
     private var nodeSettings = ProfileNodeSettingsItem()
     private val adapter = ProfileAdapter(
-        context, this::requestActive, this::showMenu, this::showNodeDetails,
+        context, this::showMenu, this::showNodeDetails,
         { requests.trySend(Request.ManageGroups) },
         { profile -> requests.trySend(Request.TestProfile(profile)) }
     )
@@ -147,10 +147,6 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
 
     fun requestCreate() {
         requests.trySend(Request.Create)
-    }
-
-    private fun requestActive(profile: Profile) {
-        requests.trySend(Request.Active(profile))
     }
 
     fun requestActive(dialog: Dialog, profile: Profile) {
