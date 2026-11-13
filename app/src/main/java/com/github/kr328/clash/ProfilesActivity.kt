@@ -289,11 +289,16 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         }
         val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
         val groupById = groups.associateBy { it.id }
+        val nodeErrors = mutableMapOf<UUID, String>()
         val nodeMap = withContext(Dispatchers.IO) {
             profiles.filter { it.imported }.associate { profile ->
-                val rawNodes = runCatching {
+                val parsed = runCatching {
                     Clash.queryProfileProxies(importedDir.resolve(profile.uuid.toString()))
-                }.getOrDefault(emptyList())
+                }
+                val rawNodes = parsed.getOrElse { error ->
+                    nodeErrors[profile.uuid] = error.message ?: "未知解析错误"
+                    emptyList()
+                }
                 val overrides = dao.queryOverrides(profile.uuid).associateBy { it.nodeKey }
                 profile.uuid to rawNodes.map { node ->
                     val override = overrides[node.key]
@@ -331,6 +336,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
             profiles,
             nodeMap,
             groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) },
+            nodeErrors,
             ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs)
         )
     }
