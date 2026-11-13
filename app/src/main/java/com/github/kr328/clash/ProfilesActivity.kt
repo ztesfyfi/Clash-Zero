@@ -106,7 +106,10 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                 ProfileNodeOverride(
                                     it.profile.uuid, it.node.key, it.node.originalName,
                                     it.name.takeIf { name -> name.isNotBlank() && name != it.node.originalName },
-                                    old?.groupId
+                                    old?.groupId,
+                                    old?.delayMs,
+                                    old?.testedAt,
+                                    old?.testError
                                 )
                             )
                             design.fetch()
@@ -117,7 +120,10 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             dao.upsertOverride(
                                 ProfileNodeOverride(
                                     it.profile.uuid, it.node.key, it.node.originalName,
-                                    old?.customName, it.groupId
+                                    old?.customName, it.groupId,
+                                    old?.delayMs,
+                                    old?.testedAt,
+                                    old?.testError
                                 )
                             )
                             design.fetch()
