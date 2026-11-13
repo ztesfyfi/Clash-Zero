@@ -39,6 +39,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         object UpdateAll : Request()
         object ManageGroups : Request()
         data class TestProfile(val profile: Profile) : Request()
+        data class TestNode(val profile: Profile, val node: ProfileNodeItem) : Request()
         data class SetDelayThresholds(val good: Int?, val slow: Int?) : Request()
         data class RenameNode(val profile: Profile, val node: ProfileNodeItem, val name: String) : Request()
         data class SetNodeGroup(val profile: Profile, val node: ProfileNodeItem, val groupId: String?) : Request()
@@ -229,7 +230,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：${node.delayText}\n节点标识：${node.key}")
             .setPositiveButton("重命名") { _, _ -> showRenameNode(profile, node) }
             .setNegativeButton("分组") { _, _ -> showNodeGroupPicker(profile, node) }
-            .setNeutralButton(R.string.close, null)
+            .setNeutralButton("测速") { _, _ -> requests.trySend(Request.TestNode(profile, node)) }
             .show()
     }
 
