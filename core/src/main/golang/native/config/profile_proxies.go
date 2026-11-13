@@ -17,6 +17,14 @@ type ProfileProxy struct {
 	Type string `json:"type"`
 }
 
+func cloneProxy(proxy map[string]any) map[string]any {
+	cloned := make(map[string]any, len(proxy))
+	for key, value := range proxy {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 type proxyProviderFile struct {
 	Proxies []map[string]any `yaml:"proxies"`
 }
@@ -85,7 +93,15 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 		if err := yaml.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("parse proxy provider %q: %w", providerName, err)
 		}
+		override, _ := provider["override"].(map[string]any)
+		prefix, _ := override["additional-prefix"].(string)
+		suffix, _ := override["additional-suffix"].(string)
 		for _, proxy := range file.Proxies {
+			if prefix != "" || suffix != "" {
+				proxy = cloneProxy(proxy)
+				name, _ := proxy["name"].(string)
+				proxy["name"] = prefix + name + suffix
+			}
 			if err := appendProxy(proxy); err != nil {
 				return nil, err
 			}
