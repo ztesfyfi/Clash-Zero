@@ -62,7 +62,6 @@ object RoutingPolicyValidator {
                     }
                     if (set.kind != expectedKind) return "Rule set type does not match condition type"
                 }
-                PolicyCondition.PROCESS_PACKAGE -> Unit
                 else -> return "Unsupported condition type: ${condition.matcherType}"
             }
         }
