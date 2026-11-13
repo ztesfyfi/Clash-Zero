@@ -83,7 +83,7 @@ object StrategyConfigCompiler {
             proxyGroups.put(json)
         }
 
-        for (group in strategies.filter { it.id in usedStrategyIds }) {
+        for (group in strategies.filter { it.id in usableStrategies }) {
             val members = strategyMembers[group.id].orEmpty().sortedBy { it.position }.mapNotNull { member ->
                 when (member.memberType) {
                     StrategyGroupMember.TYPE_NODE_GROUP -> nodeNames[member.memberId]
