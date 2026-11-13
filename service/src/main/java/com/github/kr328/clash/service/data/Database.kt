@@ -28,8 +28,8 @@ private suspend fun installProfileNodePresets(dao: ProfileNodeDao) {
 }
 
 @DB(
-    version = 8,
-    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class, RuleSet::class, ProfileNodeGroup::class, ProfileNodeOverride::class],
+    version = 9,
+    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class, RuleSet::class, ProfileNodeGroup::class, ProfileNodeOverride::class, ProfileNodeSettings::class],
     exportSchema = false,
 )
 
