@@ -9,7 +9,6 @@ import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.common.util.ticker
 import com.github.kr328.clash.design.ProfilesDesign
 import com.github.kr328.clash.core.Clash
-import com.github.kr328.clash.core.model.ProxySort
 import com.github.kr328.clash.design.model.ProfileNodeItem
 import com.github.kr328.clash.design.model.ProfileNodeGroupItem
 import com.github.kr328.clash.design.model.ProfileNodeSettingsItem
