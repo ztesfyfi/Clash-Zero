@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.text.InputType
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.view.ViewGroup.LayoutParams
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
@@ -13,6 +15,7 @@ import android.view.animation.AnimationUtils
 import com.github.kr328.clash.design.adapter.ProfileAdapter
 import com.github.kr328.clash.design.model.ProfileNodeItem
 import com.github.kr328.clash.design.model.ProfileNodeGroupItem
+import com.github.kr328.clash.design.model.ProfileNodeSettingsItem
 import com.github.kr328.clash.design.databinding.DesignProfilesBinding
 import com.github.kr328.clash.design.databinding.DialogProfilesMenuBinding
 import com.github.kr328.clash.design.databinding.DialogProfileQrCodeBinding
@@ -34,6 +37,8 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     sealed class Request {
         object UpdateAll : Request()
         object ManageGroups : Request()
+        data class TestProfile(val profile: Profile) : Request()
+        data class SetDelayThresholds(val good: Int?, val slow: Int?) : Request()
         data class RenameNode(val profile: Profile, val node: ProfileNodeItem, val name: String) : Request()
         data class SetNodeGroup(val profile: Profile, val node: ProfileNodeItem, val groupId: String?) : Request()
         data class CreateNodeGroup(val name: String) : Request()
@@ -52,9 +57,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private val binding = DesignProfilesBinding
         .inflate(context.layoutInflater, context.root, false)
     private var nodeGroups: List<ProfileNodeGroupItem> = emptyList()
+    private var nodeSettings = ProfileNodeSettingsItem()
     private val adapter = ProfileAdapter(
         context, this::requestActive, this::showMenu, this::showNodeDetails,
-        { requests.trySend(Request.ManageGroups) }
+        { requests.trySend(Request.ManageGroups) },
+        { profile -> requests.trySend(Request.TestProfile(profile)) }
     )
 
     private var allUpdating: Boolean
@@ -71,8 +78,10 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         profiles: List<Profile>,
         nodes: Map<java.util.UUID, List<ProfileNodeItem>> = emptyMap(),
         groups: List<ProfileNodeGroupItem> = emptyList(),
+        settings: ProfileNodeSettingsItem = ProfileNodeSettingsItem(),
     ) {
         nodeGroups = groups
+        nodeSettings = settings
         adapter.setNodes(nodes)
         adapter.apply {
             patchDataSet(this::profiles, profiles, id = { it.uuid })
@@ -272,7 +281,45 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                     .show()
             }
             .setPositiveButton("新建分组") { _, _ -> showCreateNodeGroup() }
+            .setNeutralButton("测速阈值") { _, _ -> showDelayThresholds() }
             .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun showDelayThresholds() {
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 12, 48, 0)
+        }
+        val good = EditText(context).apply {
+            hint = "绿色上限（毫秒）"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            setText(nodeSettings.goodThresholdMs?.toString().orEmpty())
+        }
+        val slow = EditText(context).apply {
+            hint = "黄色上限（毫秒）"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+            setText(nodeSettings.slowThresholdMs?.toString().orEmpty())
+        }
+        container.addView(good, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        container.addView(slow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        MaterialAlertDialogBuilder(context)
+            .setTitle("测速延迟阈值")
+            .setMessage("留空表示不启用颜色分级；绿色上限必须小于黄色上限。")
+            .setView(container)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val goodValue = good.text.toString().toIntOrNull()
+                val slowValue = slow.text.toString().toIntOrNull()
+                if ((goodValue == null) != (slowValue == null) ||
+                    (goodValue != null && slowValue != null && (goodValue <= 0 || slowValue <= goodValue))) {
+                    showToast("阈值无效，请检查两个毫秒数值。", ToastDuration.Long)
+                } else {
+                    requests.trySend(Request.SetDelayThresholds(goodValue, slowValue))
+                }
+            }
             .show()
     }
 
