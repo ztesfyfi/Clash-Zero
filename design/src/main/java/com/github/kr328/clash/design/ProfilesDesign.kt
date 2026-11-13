@@ -80,11 +80,12 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         profiles: List<Profile>,
         nodes: Map<java.util.UUID, List<ProfileNodeItem>> = emptyMap(),
         groups: List<ProfileNodeGroupItem> = emptyList(),
+        errors: Map<java.util.UUID, String> = emptyMap(),
         settings: ProfileNodeSettingsItem = ProfileNodeSettingsItem(),
     ) {
         nodeGroups = groups
         nodeSettings = settings
-        adapter.setNodes(nodes)
+        adapter.setNodes(nodes, errors)
         adapter.apply {
             patchDataSet(this::profiles, profiles, id = { it.uuid })
         }
