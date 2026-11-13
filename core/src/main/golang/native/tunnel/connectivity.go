@@ -57,19 +57,10 @@ func TestProxy(name, url string, timeout time.Duration) (int, error) {
 		// Provider nodes are held by proxy providers rather than the top-level
 		// proxy map. Search the active profile's groups so provider-backed nodes
 		// can be tested individually as well.
-		for _, groupProxy := range mihomoTunnel.Proxies() {
-			group, ok := groupProxy.Adapter().(outboundgroup.ProxyGroup)
-			if !ok {
-				continue
-			}
-			for _, proxyProvider := range group.Providers() {
-				for _, candidate := range proxyProvider.Proxies() {
-					if candidate.Name() == name {
-						proxy = candidate
-						break
-					}
-				}
-				if proxy != nil {
+		for _, proxyProvider := range mihomoTunnel.Providers() {
+			for _, candidate := range proxyProvider.Proxies() {
+				if candidate.Name() == name {
+					proxy = candidate
 					break
 				}
 			}
