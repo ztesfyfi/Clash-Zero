@@ -28,6 +28,12 @@ interface ProfileNodeDao {
     @Query("UPDATE profile_node_groups SET enabled = :enabled WHERE id = :id")
     suspend fun setGroupEnabled(id: String, enabled: Boolean)
 
+    @Query("SELECT * FROM profile_node_settings WHERE id = 1")
+    suspend fun querySettings(): ProfileNodeSettings?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSettings(settings: ProfileNodeSettings)
+
     @Query("SELECT * FROM profile_node_overrides WHERE profileUuid = :profileUuid")
     suspend fun queryOverrides(profileUuid: UUID): List<ProfileNodeOverride>
 
