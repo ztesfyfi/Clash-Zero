@@ -11,12 +11,6 @@ import kotlinx.coroutines.launch
 import java.lang.ref.SoftReference
 import androidx.room.Database as DB
 
-@DB(
-    version = 8,
-    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class, RuleSet::class, ProfileNodeGroup::class, ProfileNodeOverride::class],
-    exportSchema = false,
-)
-
 private suspend fun installProfileNodePresets(dao: ProfileNodeDao) {
     dao.insertGroups(
         listOf(
@@ -32,6 +26,12 @@ private suspend fun installProfileNodePresets(dao: ProfileNodeDao) {
         )
     )
 }
+
+@DB(
+    version = 8,
+    entities = [Imported::class, Pending::class, Selection::class, NodeGroup::class, NodeGroupMember::class, StrategyGroup::class, StrategyGroupMember::class, RoutingPolicy::class, PolicyCondition::class, RuleSet::class, ProfileNodeGroup::class, ProfileNodeOverride::class],
+    exportSchema = false,
+)
 
 abstract class Database : RoomDatabase() {
     abstract fun openImportedDao(): ImportedDao
