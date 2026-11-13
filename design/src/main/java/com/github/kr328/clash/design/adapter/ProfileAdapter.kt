@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.View
 import android.graphics.Color
 import android.text.SpannableString
+import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.ViewGroup
 import android.widget.TextView
@@ -93,7 +94,7 @@ class ProfileAdapter(
         val styled = SpannableString(summary)
         fun tint(label: String, color: Int) {
             val start = summary.indexOf(label)
-            if (start >= 0) styled.setSpan(ForegroundColorSpan(color), start, start + label.length, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (start >= 0) styled.setSpan(ForegroundColorSpan(color), start, start + label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         tint("正常：${good}", Color.rgb(46, 125, 50))
         tint("较慢：${slow}", Color.rgb(245, 158, 11))
