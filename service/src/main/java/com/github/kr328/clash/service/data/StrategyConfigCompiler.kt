@@ -37,14 +37,23 @@ object StrategyConfigCompiler {
                 .map { it.proxyName }
                 .distinct()
         }
-        val nodeNames = staticMembers.filterValues { it.isNotEmpty() }
-            .keys.associateWith(::nodeGroupName)
+        val nodeNames = nodeGroups.filter { group ->
+            group.id in strategyMembers.values.flatten()
+                .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+                .map { it.memberId } &&
+                when (group.mode) {
+                    NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
+                    NodeGroup.MODE_NAME -> !group.nameTag.isNullOrBlank()
+                    else -> false
+                }
+        }.associate { it.id to nodeGroupName(it.id) }
+        val availableStrategyIds = strategies.map { it.id }.toSet()
         val usableStrategies = strategies.filter { group ->
             val members = strategyMembers[group.id].orEmpty()
             members.isNotEmpty() && members.all { member ->
                 when (member.memberType) {
                     StrategyGroupMember.TYPE_NODE_GROUP -> member.memberId in nodeNames
-                    StrategyGroupMember.TYPE_STRATEGY_GROUP -> member.memberId in strategies.map { it.id }
+                    StrategyGroupMember.TYPE_STRATEGY_GROUP -> member.memberId in availableStrategyIds
                     else -> false
                 }
             }
@@ -61,13 +70,17 @@ object StrategyConfigCompiler {
         val proxyGroups = JSONArray()
 
         for (group in nodeGroups.filter { it.id in nodeNames.keys }) {
-            val members = staticMembers[group.id].orEmpty()
-            proxyGroups.put(
-                JSONObject()
-                    .put("name", nodeNames.getValue(group.id))
-                    .put("type", "select")
-                    .put("proxies", JSONArray(members))
-            )
+            val json = JSONObject()
+                .put("name", nodeNames.getValue(group.id))
+                .put("type", "select")
+            when (group.mode) {
+                NodeGroup.MODE_STATIC -> json.put("proxies", JSONArray(staticMembers[group.id].orEmpty()))
+                NodeGroup.MODE_NAME -> {
+                    json.put("include-all", true)
+                        .put("filter", "(?i)^" + Regex.escape(group.nameTag.orEmpty()))
+                }
+            }
+            proxyGroups.put(json)
         }
 
         for (group in strategies.filter { it.id in usedStrategyIds }) {
