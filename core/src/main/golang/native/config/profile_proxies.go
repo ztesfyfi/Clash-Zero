@@ -26,6 +26,29 @@ func cloneProxy(proxy map[string]any) map[string]any {
 	return cloned
 }
 
+func providerProxyName(name string, provider map[string]any) string {
+	override, _ := provider["override"].(map[string]any)
+	rules, _ := override["proxy-name"].([]any)
+	for _, rawRule := range rules {
+		rule, ok := rawRule.(map[string]any)
+		if !ok {
+			continue
+		}
+		pattern, _ := rule["pattern"].(string)
+		target, _ := rule["target"].(string)
+		if pattern == "" {
+			continue
+		}
+		expression, err := regexp.Compile(pattern)
+		if err == nil {
+			name = expression.ReplaceAllString(name, target)
+		}
+	}
+	prefix, _ := override["additional-prefix"].(string)
+	suffix, _ := override["additional-suffix"].(string)
+	return prefix + name + suffix
+}
+
 type proxyProviderFile struct {
 	Proxies []map[string]any `yaml:"proxies"`
 }
@@ -87,6 +110,9 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 			if payload, ok := provider["payload"].([]any); ok {
 				for _, item := range payload {
 					if proxy, ok := item.(map[string]any); ok {
+						proxy = cloneProxy(proxy)
+						name, _ := proxy["name"].(string)
+						proxy["name"] = providerProxyName(name, provider)
 						if err := appendProxy(proxy); err != nil {
 							return nil, err
 						}
@@ -103,30 +129,10 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 		if err := yaml.Unmarshal(data, &file); err != nil {
 			return nil, fmt.Errorf("parse proxy provider %q: %w", providerName, err)
 		}
-		override, _ := provider["override"].(map[string]any)
-		prefix, _ := override["additional-prefix"].(string)
-		suffix, _ := override["additional-suffix"].(string)
-		nameRules, _ := override["proxy-name"].([]any)
 		for _, proxy := range file.Proxies {
 			proxy = cloneProxy(proxy)
 			name, _ := proxy["name"].(string)
-			for _, rawRule := range nameRules {
-				rule, ok := rawRule.(map[string]any)
-				if !ok {
-					continue
-				}
-				pattern, _ := rule["pattern"].(string)
-				target, _ := rule["target"].(string)
-				if pattern == "" {
-					continue
-				}
-				expression, err := regexp.Compile(pattern)
-				if err != nil {
-					return nil, fmt.Errorf("provider %q proxy-name pattern: %w", providerName, err)
-				}
-				name = expression.ReplaceAllString(name, target)
-			}
-			proxy["name"] = prefix + name + suffix
+			proxy["name"] = providerProxyName(name, provider)
 			if err := appendProxy(proxy); err != nil {
 				return nil, err
 			}
