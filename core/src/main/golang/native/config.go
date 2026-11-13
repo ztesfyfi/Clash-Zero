@@ -49,6 +49,15 @@ func load(completable unsafe.Pointer, path C.c_string) {
 	}(C.GoString(path))
 }
 
+//export queryProfileProxies
+func queryProfileProxies(path C.c_string) *C.char {
+	proxies, err := config.QueryProfileProxies(C.GoString(path))
+	if err != nil {
+		return marshalJson(map[string]any{"error": err.Error()})
+	}
+	return marshalJson(proxies)
+}
+
 //export readOverride
 func readOverride(slot C.int) *C.char {
 	return C.CString(config.ReadOverride(config.OverrideSlot(slot)))
