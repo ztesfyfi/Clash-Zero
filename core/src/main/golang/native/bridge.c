@@ -6,6 +6,7 @@ void (*mark_socket_func)(void *tun_interface, int fd);
 int (*query_socket_uid_func)(void *tun_interface, int protocol, const char *source, const char *target);
 
 void (*complete_func)(void *completable, const char *exception);
+void (*complete_string_func)(void *completable, const char *value);
 
 void (*fetch_report_func)(void *fetch_callback, const char *status_json);
 
@@ -40,6 +41,14 @@ void complete(void *obj, char *error) {
     complete_func(obj, error);
 
     free(error);
+}
+
+void complete_string(void *obj, char *value) {
+    TRACE_METHOD();
+
+    complete_string_func(obj, value);
+
+    free(value);
 }
 
 void fetch_complete(void *fetch_callback, char *exception) {
