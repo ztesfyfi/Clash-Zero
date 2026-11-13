@@ -32,19 +32,32 @@ object StrategyConfigCompiler {
         val graphError = StrategyGraphValidator.validate(strategyIds, nodeGroupIds, references)
         require(graphError == null) { graphError ?: "代理策略引用无效" }
 
-        val nodeNames = nodeGroups.associate { it.id to nodeGroupName(it.id) }
-        val strategyNames = strategies.associate { it.id to strategyName(it.id) }
+        val usedNodeIds = strategyMembers.values.flatten()
+            .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+            .map { it.memberId }.toSet()
+        val usedStrategyIds = strategies.filter { group ->
+            strategyMembers[group.id].orEmpty().isNotEmpty()
+        }.map { it.id }.toMutableSet()
+        var removed: Boolean
+        do {
+            removed = usedStrategyIds.removeAll { id ->
+                strategyMembers[id].orEmpty().any {
+                    it.memberType == StrategyGroupMember.TYPE_STRATEGY_GROUP && it.memberId !in usedStrategyIds
+                }
+            }
+        } while (removed)
+
+        val nodeNames = nodeGroups.filter { it.id in usedNodeIds && it.mode == NodeGroup.MODE_STATIC }
+            .associate { it.id to nodeGroupName(it.id) }
+        val strategyNames = usedStrategyIds.associateWith(::strategyName)
         val proxyGroups = JSONArray()
 
-        for (group in nodeGroups) {
-            require(group.mode == NodeGroup.MODE_STATIC) {
-                "动态节点组“${group.name}”尚未完成节点元数据匹配，暂不能应用到 Mihomo"
-            }
+        for (group in nodeGroups.filter { it.id in nodeNames.keys }) {
             val members = database.openNodeGroupDao().queryMembers(group.id)
                 .filter { it.profileUuid == profileUuid }
                 .map { it.proxyName }
                 .distinct()
-            require(members.isNotEmpty()) { "静态节点组“${group.name}”没有属于当前订阅的有效节点" }
+            if (members.isEmpty()) continue
             proxyGroups.put(
                 JSONObject()
                     .put("name", nodeNames.getValue(group.id))
@@ -53,17 +66,15 @@ object StrategyConfigCompiler {
             )
         }
 
-        for (group in strategies) {
-            val members = strategyMembers[group.id].orEmpty().sortedBy { it.position }.map { member ->
+        for (group in strategies.filter { it.id in usedStrategyIds }) {
+            val members = strategyMembers[group.id].orEmpty().sortedBy { it.position }.mapNotNull { member ->
                 when (member.memberType) {
-                    StrategyGroupMember.TYPE_NODE_GROUP ->
-                        nodeNames[member.memberId] ?: error("代理策略“${group.name}”引用了不存在或已停用的出站节点组")
-                    StrategyGroupMember.TYPE_STRATEGY_GROUP ->
-                        strategyNames[member.memberId] ?: error("代理策略“${group.name}”引用了不存在或已停用的代理策略")
-                    else -> error("代理策略“${group.name}”包含不支持的成员类型")
+                    StrategyGroupMember.TYPE_NODE_GROUP -> nodeNames[member.memberId]
+                    StrategyGroupMember.TYPE_STRATEGY_GROUP -> strategyNames[member.memberId]
+                    else -> null
                 }
             }
-            require(members.isNotEmpty()) { "代理策略“${group.name}”没有有效成员" }
+            if (members.isEmpty()) continue
             val type = when (group.mode) {
                 StrategyGroup.MODE_URL_TEST -> "url-test"
                 StrategyGroup.MODE_FALLBACK -> "fallback"
@@ -100,7 +111,7 @@ object StrategyConfigCompiler {
                 RoutingPolicy.TARGET_DIRECT -> "DIRECT"
                 RoutingPolicy.TARGET_REJECT -> "REJECT"
                 RoutingPolicy.TARGET_STRATEGY_GROUP ->
-                    strategyNames[policy.targetId] ?: error("目标分流“${policy.name}”引用了不存在或已停用的代理策略")
+                    strategyNames[policy.targetId] ?: continue
                 else -> error("目标分流“${policy.name}”包含不支持的出口类型")
             }
             val type = when (condition.matcherType) {
