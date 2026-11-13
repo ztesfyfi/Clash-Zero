@@ -229,7 +229,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         val group = node.groupName ?: "未分组"
         MaterialAlertDialogBuilder(context)
             .setTitle(node.displayName)
-            .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：未测试\n节点标识：${node.key}")
+            .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：${node.delayText}\n节点标识：${node.key}")
             .setPositiveButton("重命名") { _, _ -> showRenameNode(profile, node) }
             .setNegativeButton("分组") { _, _ -> showNodeGroupPicker(profile, node) }
             .setNeutralButton(R.string.close, null)
