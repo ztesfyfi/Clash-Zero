@@ -9,11 +9,14 @@ import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.common.util.ticker
 import com.github.kr328.clash.design.ProfilesDesign
 import com.github.kr328.clash.core.Clash
+import com.github.kr328.clash.core.model.ProxySort
 import com.github.kr328.clash.design.model.ProfileNodeItem
 import com.github.kr328.clash.design.model.ProfileNodeGroupItem
+import com.github.kr328.clash.design.model.ProfileNodeSettingsItem
 import com.github.kr328.clash.service.data.Database
 import com.github.kr328.clash.service.data.ProfileNodeGroup
 import com.github.kr328.clash.service.data.ProfileNodeOverride
+import com.github.kr328.clash.service.data.ProfileNodeSettings
 import com.github.kr328.clash.service.util.importedDir
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
@@ -51,6 +54,44 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             startActivity(NewProfileActivity::class.intent)
                         ProfilesDesign.Request.ManageGroups ->
                             design.showNodeGroupManager()
+                        is ProfilesDesign.Request.TestProfile -> {
+                            if (!it.profile.active) {
+                                design.showToast("请先启用这个订阅，再进行测速。", ToastDuration.Long)
+                            } else {
+                                withContext(Dispatchers.IO) {
+                                    val dao = Database.database.openProfileNodeDao()
+                                    val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
+                                    Clash.healthCheck("GLOBAL").await()
+                                    val runtimeNodes = Clash.queryGroup("GLOBAL", ProxySort.Default).proxies.associateBy { proxy -> proxy.name }
+                                    val now = System.currentTimeMillis()
+                                    profileNodes.forEach { node ->
+                                        val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == node.key }
+                                        val delay = runtimeNodes[node.name]?.delay?.takeIf { it > 0 }
+                                        dao.upsertOverride(
+                                            ProfileNodeOverride(
+                                                profileUuid = it.profile.uuid,
+                                                nodeKey = node.key,
+                                                originalName = node.name,
+                                                customName = old?.customName,
+                                                groupId = old?.groupId,
+                                                delayMs = delay,
+                                                testedAt = now,
+                                                testError = if (delay == null) "测速失败" else null
+                                            )
+                                        )
+                                    }
+                                }
+                                design.fetch()
+                                design.showToast("订阅节点测速完成。", ToastDuration.Long)
+                            }
+                        }
+                        is ProfilesDesign.Request.SetDelayThresholds -> withContext(Dispatchers.IO) {
+                            Database.database.openProfileNodeDao().upsertSettings(
+                                ProfileNodeSettings(goodThresholdMs = it.good, slowThresholdMs = it.slow)
+                            )
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
                         is ProfilesDesign.Request.RenameNode -> withContext(Dispatchers.IO) {
                             val dao = Database.database.openProfileNodeDao()
                             val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == it.node.key }
@@ -160,6 +201,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
     private suspend fun ProfilesDesign.fetch() {
         val profiles = withProfile { queryAll() }
         val dao = Database.database.openProfileNodeDao()
+        val settings = withContext(Dispatchers.IO) { dao.querySettings() ?: ProfileNodeSettings() }
         val groups = withContext(Dispatchers.IO) {
             dao.insertGroups(
                 listOf(
@@ -193,6 +235,19 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         type = node.type,
                         groupId = group?.id,
                         groupName = group?.takeIf { it.enabled }?.name,
+                        delayText = when {
+                            override?.delayMs != null -> "${override.delayMs} ms"
+                            override?.testedAt != null -> override.testError ?: "测速失败"
+                            else -> "未测试"
+                        },
+                        delayState = when {
+                            override?.delayMs == null && override?.testedAt == null -> "UNTESTED"
+                            override?.delayMs == null -> "ERROR"
+                            settings.goodThresholdMs != null && override.delayMs <= settings.goodThresholdMs -> "GOOD"
+                            settings.slowThresholdMs != null && override.delayMs <= settings.slowThresholdMs -> "SLOW"
+                            settings.goodThresholdMs != null && settings.slowThresholdMs != null -> "ERROR"
+                            else -> "TESTED"
+                        },
                     )
                 }
             }
@@ -200,7 +255,8 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         patchProfiles(
             profiles,
             nodeMap,
-            groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) }
+            groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) },
+            ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs)
         )
     }
 
