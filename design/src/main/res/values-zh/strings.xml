@@ -12,7 +12,7 @@
     <string name="bypass_private_network_summary">绕过私有网络地址</string>
     <string name="cancel">取消</string>
     <string name="clash_logcat">Clash 日志捕捉工具</string>
-    <string name="create_profile">创建配置</string>
+    <string name="create_profile">新建订阅</string>
     <string name="dark_mode">暗黑模式</string>
     <string name="default_">默认</string>
     <string name="delay">延迟</string>
@@ -54,12 +54,12 @@
     <string name="mode">模式</string>
     <string name="name">名称</string>
     <string name="network">网络</string>
-    <string name="new_profile">新配置</string>
+    <string name="new_profile">新建订阅</string>
     <string name="not_selected">未选择</string>
     <string name="ok">确认</string>
-    <string name="profile">配置</string>
-    <string name="profile_name">配置名称</string>
-    <string name="profiles">配置</string>
+    <string name="profile">订阅管理</string>
+    <string name="profile_name">订阅名称</string>
+    <string name="profiles">订阅管理</string>
     <string name="properties">参数</string>
     <string name="proxy">代理</string>
     <string name="recently">近期</string>
