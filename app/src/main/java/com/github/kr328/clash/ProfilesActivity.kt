@@ -85,7 +85,6 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                         )
                                     }
                                 }
-                                    }
                                     design.fetch()
                                     design.showToast("订阅节点测速完成。", ToastDuration.Long)
                                 } catch (error: Exception) {
