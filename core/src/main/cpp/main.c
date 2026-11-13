@@ -469,6 +469,18 @@ static void call_completable_complete_impl(void *completable, const char *except
     }
 }
 
+static void call_completable_complete_string_impl(void *completable, const char *value) {
+    TRACE_METHOD();
+
+    ATTACH_JNI();
+
+    jstring _value = new_string(value);
+    (*env)->CallBooleanMethod(env,
+                              (jobject) completable,
+                              (jmethodID) m_completable_complete,
+                              (jobject) _value);
+}
+
 static void call_fetch_callback_report_impl(void *fetch_callback, const char *status_json) {
     TRACE_METHOD();
 
@@ -607,6 +619,7 @@ JNI_OnLoad(JavaVM *vm, void *reserved) {
     mark_socket_func = &call_tun_interface_mark_socket_impl;
     query_socket_uid_func = &call_tun_interface_query_socket_uid_impl;
     complete_func = &call_completable_complete_impl;
+    complete_string_func = &call_completable_complete_string_impl;
     fetch_report_func = &call_fetch_callback_report_impl;
     fetch_complete_func = &call_fetch_callback_complete_impl;
     logcat_received_func = &call_logcat_interface_received_impl;
