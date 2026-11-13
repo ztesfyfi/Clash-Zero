@@ -1,14 +1,11 @@
 package com.github.kr328.clash
 
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -31,7 +28,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/** Visual editor for node groups, strategy groups, app assignments and routing policies. */
+/** Visual editor for outbound node groups, proxy strategies and target routing. */
 class StrategyManagerActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_SECTION = "strategy_manager_section"
@@ -39,8 +36,6 @@ class StrategyManagerActivity : AppCompatActivity() {
         const val SECTION_STRATEGY_GROUPS = "strategy_groups"
         const val SECTION_POLICIES = "policies"
     }
-
-    private data class InstalledApp(val packageName: String, val label: String)
 
     private val scope: CoroutineScope = MainScope()
     private val database get() = Database.database
@@ -51,9 +46,9 @@ class StrategyManagerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         section = intent.getStringExtra(EXTRA_SECTION) ?: SECTION_NODE_GROUPS
         val title = when (section) {
-            SECTION_NODE_GROUPS -> "节点组"
-            SECTION_STRATEGY_GROUPS -> "策略组"
-            else -> "策略"
+            SECTION_NODE_GROUPS -> "出站节点"
+            SECTION_STRATEGY_GROUPS -> "代理策略"
+            else -> "目标分流"
         }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -83,8 +78,8 @@ class StrategyManagerActivity : AppCompatActivity() {
         root.addView(header)
         root.addView(TextView(this).apply {
             text = when (section) {
-                SECTION_NODE_GROUPS -> "创建后可随时编辑名称、分组类型和关联条件。"
-                SECTION_STRATEGY_GROUPS -> "打开单个策略组编辑名称、类型及 APP 分流；成员单独管理。"
+                SECTION_NODE_GROUPS -> "统一管理静态与动态出站节点组。"
+                SECTION_STRATEGY_GROUPS -> "管理代理策略类型、成员组合及出口选择方式。"
                 else -> "点击策略项可修改匹配条件和目标策略组。"
             }
             textSize = 13f
@@ -145,7 +140,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                                 else -> database.openStrategyGroupDao().queryById(policy.targetId.orEmpty())?.name ?: "目标组缺失"
                             }
                             val matcherSummary = conditions.joinToString("、") { "${it.matcherType}: ${it.matcherValue}" }
-                            addRow(policy.name, "目标：$target · ${matcherSummary.ifBlank { "未设置条件" }} · 优先级：${policy.priority}", policy.enabled) {
+                            addRow(policy.name, "出口：$target · ${matcherSummary.ifBlank { "未设置条件" }} · 优先级：${policy.priority}", policy.enabled) {
                                 editPolicy(policy)
                             }
                         }
@@ -228,176 +223,62 @@ class StrategyManagerActivity : AppCompatActivity() {
     }
 
     private fun showStrategyGroupEditor(existing: StrategyGroup?) {
-        scope.launch {
-            val apps = loadInstalledApps()
-            val policies = database.openRoutingPolicyDao().queryAll()
-            val selectedPackages = mutableSetOf<String>()
-            policies.filter {
-                it.targetType == RoutingPolicy.TARGET_STRATEGY_GROUP && it.targetId == existing?.id
-            }.forEach { policy ->
-                database.openRoutingPolicyDao().queryConditions(policy.id)
-                    .filter { it.matcherType == PolicyCondition.PROCESS_PACKAGE }
-                    .forEach { selectedPackages += it.matcherValue }
-            }
-
-            val name = edit("策略组名称").apply { setText(existing?.name.orEmpty()) }
-            val mode = spinner(listOf("手动选择", "URL 自动测速", "故障转移", "负载均衡"))
-            mode.setSelection(when (existing?.mode) {
-                StrategyGroup.MODE_URL_TEST -> 1
-                StrategyGroup.MODE_FALLBACK -> 2
-                StrategyGroup.MODE_LOAD_BALANCE -> 3
-                else -> 0
+        val name = edit("代理分流规则名称").apply { setText(existing?.name.orEmpty()) }
+        val mode = spinner(listOf("手动选择", "自动择优", "故障转移", "负载均衡"))
+        mode.setSelection(when (existing?.mode) {
+            StrategyGroup.MODE_URL_TEST -> 1
+            StrategyGroup.MODE_FALLBACK -> 2
+            StrategyGroup.MODE_LOAD_BALANCE -> 3
+            else -> 0
+        })
+        val memberButton = Button(this).apply {
+            text = "编辑此策略的成员"
+            isEnabled = existing != null
+            setOnClickListener { existing?.let(::manageStrategyGroupMembers) }
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(label("代理策略名称")); addView(name)
+            addView(label("策略类型")); addView(mode)
+            addView(TextView(this@StrategyManagerActivity).apply {
+                text = "策略成员可引用出站节点组或其他代理策略；不在这里绑定具体节点或 Android 应用。"
+                textSize = 12f
+                alpha = 0.75f
+                setPadding(0, dp(8), 0, dp(8))
             })
-            val checks = linkedMapOf<String, CheckBox>()
-            val form = LinearLayout(this@StrategyManagerActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(24), dp(8), dp(24), 0)
-                addView(label("策略组名称")); addView(name)
-                addView(label("策略组类型")); addView(mode)
-                addView(label("APP 分流"))
-                addView(TextView(this@StrategyManagerActivity).apply {
-                    text = "勾选的 APP 走当前策略组；未勾选的 APP 不生成应用专属规则，继续按下方“策略”中的代理规则处理。"
-                    textSize = 12f
-                    alpha = 0.75f
-                    setPadding(0, dp(4), 0, dp(8))
-                })
-                val appList = LinearLayout(this@StrategyManagerActivity).apply { orientation = LinearLayout.VERTICAL }
-                apps.forEach { app ->
-                    val check = CheckBox(this@StrategyManagerActivity).apply {
-                        text = app.label
-                        isChecked = app.packageName in selectedPackages
-                        textSize = 14f
-                        tag = app.packageName
-                    }
-                    checks[app.packageName] = check
-                    appList.addView(check)
-                }
-                val appScroll = ScrollView(this@StrategyManagerActivity).apply {
-                    addView(appList)
-                    layoutParams = LinearLayout.LayoutParams(-1, dp(300))
-                }
-                addView(appScroll)
-                val memberButton = Button(this@StrategyManagerActivity).apply {
-                    text = "编辑此策略组的成员"
-                    isEnabled = existing != null
-                }
-                addView(memberButton)
-                memberButton.setOnClickListener {
-                    manageStrategyGroupMembers(existing!!)
-                }
-            }
-            val dialog = AlertDialog.Builder(this@StrategyManagerActivity)
-                .setTitle(if (existing == null) "新建策略组" else "编辑：${existing.name}")
-                .setView(form)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", null)
-                .create()
-            dialog.setOnShowListener {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    val groupName = name.text.toString().trim()
-                    if (groupName.isBlank()) {
-                        toast("请输入策略组名称")
-                        return@setOnClickListener
-                    }
-                    val groupMode = when (mode.selectedItemPosition) {
-                        1 -> StrategyGroup.MODE_URL_TEST
-                        2 -> StrategyGroup.MODE_FALLBACK
-                        3 -> StrategyGroup.MODE_LOAD_BALANCE
-                        else -> StrategyGroup.MODE_SELECT
-                    }
-                    val saved = existing?.copy(name = groupName, mode = groupMode, updatedAt = System.currentTimeMillis())
-                        ?: StrategyGroup(name = groupName, mode = groupMode)
-                    val chosen = checks.filterValues { it.isChecked }.keys
-                    dialog.dismiss()
-                    scope.launch {
-                        try {
-                            database.openStrategyGroupDao().upsert(saved)
-                            syncAppAssignments(saved, apps, chosen)
-                            toast("策略组已保存")
-                            refresh()
-                        } catch (error: Exception) {
-                            toast("保存失败：${error.message}")
-                        }
-                    }
-                }
-            }
-            dialog.show()
+            addView(memberButton)
         }
-    }
-
-    private suspend fun loadInstalledApps(): List<InstalledApp> {
-        val pm = packageManager
-        return pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            .asSequence()
-            .filter { it.packageName != packageName }
-            .filter { pm.getLaunchIntentForPackage(it.packageName) != null }
-            .map { InstalledApp(it.packageName, it.loadLabel(pm).toString().ifBlank { it.packageName }) }
-            .sortedBy { it.label.lowercase() }
-            .toList()
-    }
-
-    /** App routing is persisted as normal PROCESS_PACKAGE policies, before proxy fallback rules. */
-    private suspend fun syncAppAssignments(
-        group: StrategyGroup,
-        apps: List<InstalledApp>,
-        selectedPackages: Set<String>
-    ) {
-        val dao = database.openRoutingPolicyDao()
-        val allPolicies = dao.queryAll()
-        val allConditions = allPolicies.associateWith { policy ->
-            dao.queryConditions(policy.id)
-        }
-
-        apps.forEachIndexed { index, app ->
-            val matching = allConditions.filterValues { conditions ->
-                conditions.any {
-                    it.matcherType == PolicyCondition.PROCESS_PACKAGE && it.matcherValue == app.packageName
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "新建代理策略" else "编辑：${existing.name}")
+            .setView(form)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("保存", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val groupName = name.text.toString().trim()
+                if (groupName.isBlank()) {
+                    toast("请输入代理策略名称")
+                    return@setOnClickListener
                 }
-            }
-            if (app.packageName in selectedPackages) {
-                val reusable = matching.entries.firstOrNull { (_, conditions) ->
-                    conditions.size == 1 && conditions.single().matcherType == PolicyCondition.PROCESS_PACKAGE
+                val groupMode = when (mode.selectedItemPosition) {
+                    1 -> StrategyGroup.MODE_URL_TEST
+                    2 -> StrategyGroup.MODE_FALLBACK
+                    3 -> StrategyGroup.MODE_LOAD_BALANCE
+                    else -> StrategyGroup.MODE_SELECT
                 }
-                if (reusable != null) {
-                    val old = reusable.key
-                    val condition = reusable.value.single()
-                    val updated = old.copy(
-                        name = app.label,
-                        targetType = RoutingPolicy.TARGET_STRATEGY_GROUP,
-                        targetId = group.id,
-                        priority = minOf(old.priority, -10000 + index),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    StrategyConfigurationRepository(database).savePolicy(updated, listOf(condition))
-                } else {
-                    val policy = RoutingPolicy(
-                        name = app.label,
-                        targetType = RoutingPolicy.TARGET_STRATEGY_GROUP,
-                        targetId = group.id,
-                        priority = -10000 + index
-                    )
-                    val condition = PolicyCondition(
-                        policyId = policy.id,
-                        matcherType = PolicyCondition.PROCESS_PACKAGE,
-                        matcherValue = app.packageName
-                    )
-                    StrategyConfigurationRepository(database).savePolicy(policy, listOf(condition))
-                }
-            } else {
-                matching.forEach { (policy, conditions) ->
-                    if (policy.targetType == RoutingPolicy.TARGET_STRATEGY_GROUP && policy.targetId == group.id) {
-                        val remaining = dao.queryConditions(policy.id).filterNot {
-                            it.matcherType == PolicyCondition.PROCESS_PACKAGE && it.matcherValue == app.packageName
-                        }
-                        if (remaining.isEmpty()) {
-                            dao.delete(policy.id)
-                        } else {
-                            StrategyConfigurationRepository(database).savePolicy(policy, remaining)
-                        }
-                    }
+                val saved = existing?.copy(name = groupName, mode = groupMode, updatedAt = System.currentTimeMillis())
+                    ?: StrategyGroup(name = groupName, mode = groupMode)
+                dialog.dismiss()
+                scope.launch {
+                    runCatching { database.openStrategyGroupDao().upsert(saved) }
+                        .onSuccess { toast("代理策略已保存"); refresh() }
+                        .onFailure { toast("保存失败：${it.message}") }
                 }
             }
         }
+        dialog.show()
     }
 
     private fun manageStrategyGroupMembers(group: StrategyGroup) {
@@ -465,9 +346,9 @@ class StrategyManagerActivity : AppCompatActivity() {
             val name = edit("策略名称")
             val matcherType = spinner(listOf(
                 "域名 DOMAIN", "域名后缀 DOMAIN_SUFFIX", "域名关键词 DOMAIN_KEYWORD",
-                "IP IP", "IP 网段 IP_CIDR", "GeoIP GEOIP", "GeoSite GEOSITE", "应用包名 PROCESS_PACKAGE"
+                "IP IP", "IP 网段 IP_CIDR", "GeoIP GEOIP", "GeoSite GEOSITE"
             ))
-            val matcherValue = edit("匹配值（如 youtube、cn、example.com 或应用包名）")
+            val matcherValue = edit("匹配值（如 youtube、cn、example.com 或 IP 网段）")
             val target = spinner(targetOptions(groups))
             val priority = edit("优先级（数字越小越先匹配）").apply { setText((database.openRoutingPolicyDao().queryAll().size * 10).toString()) }
             val form = LinearLayout(this@StrategyManagerActivity).apply {
