@@ -7,6 +7,8 @@ data class ProfileNodeItem(
     val type: String,
     val groupId: String? = null,
     val groupName: String? = null,
+    val delayText: String = "未测试",
+    val delayState: String = "UNTESTED",
 )
 
 data class ProfileNodeGroupItem(
@@ -15,4 +17,9 @@ data class ProfileNodeGroupItem(
     val isPreset: Boolean,
     val enabled: Boolean,
     val sortOrder: Int,
+)
+
+data class ProfileNodeSettingsItem(
+    val goodThresholdMs: Int? = null,
+    val slowThresholdMs: Int? = null,
 )
