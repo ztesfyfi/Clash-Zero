@@ -18,20 +18,25 @@
         <import type="com.github.kr328.clash.design.util.IntervalKt" />
     </data>
 
-    <RelativeLayout
-        android:elevation="5dp"
+    <LinearLayout
         android:id="@+id/root_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginVertical="5dp"
         android:layout_marginHorizontal="@dimen/item_header_margin"
         android:background="@drawable/bg_b"
-        android:foreground="?attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        android:minHeight="@dimen/item_min_height"
-        android:nextFocusRight="@id/menu_view"
-        android:onClick="@{clicked}">
+        android:orientation="vertical">
+        <RelativeLayout
+            android:id="@+id/profile_header"
+            android:elevation="5dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:foreground="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:minHeight="@dimen/item_min_height"
+            android:nextFocusRight="@id/menu_view"
+            android:onClick="@{clicked}">
 
         <RadioButton
             android:id="@+id/icon_view"
@@ -138,5 +143,22 @@
                 android:layout_margin="@dimen/item_tailing_margin"
                 android:background="@drawable/ic_baseline_more_vert" />
         </FrameLayout>
-    </RelativeLayout>
+        </RelativeLayout>
+        <TextView
+            android:id="@+id/node_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="18dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:textSize="12sp"
+            android:visibility="gone" />
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/node_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:visibility="gone" />
+    </LinearLayout>
 </layout>
