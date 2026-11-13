@@ -184,6 +184,33 @@ private val MIGRATION_6_7 = object : Migration(6, 7) {
     }
 }
 
+private val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS profile_node_groups (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                isPreset INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                sortOrder INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_profile_node_groups_sortOrder ON profile_node_groups(sortOrder)")
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS profile_node_overrides (
+                profileUuid TEXT NOT NULL,
+                nodeKey TEXT NOT NULL,
+                originalName TEXT NOT NULL,
+                customName TEXT,
+                groupId TEXT,
+                PRIMARY KEY(profileUuid, nodeKey)
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_profile_node_overrides_groupId ON profile_node_overrides(groupId)")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -191,6 +218,7 @@ val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_4_5,
     MIGRATION_5_6,
     MIGRATION_6_7,
+    MIGRATION_7_8,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
