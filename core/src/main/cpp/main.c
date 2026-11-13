@@ -609,3 +609,14 @@ Java_com_github_kr328_clash_core_bridge_Bridge_nativeCoreVersion(JNIEnv *env, jo
 
     return new_string(Version);
 }
+
+JNIEXPORT jstring JNICALL
+Java_com_github_kr328_clash_core_bridge_Bridge_nativeQueryProfileProxies(JNIEnv *env, jobject thiz,
+                                                                          jstring profile_path) {
+    TRACE_METHOD();
+
+    scoped_string _profile_path = get_string(profile_path);
+    scoped_string response = queryProfileProxies(_profile_path);
+
+    return new_string(response);
+}
