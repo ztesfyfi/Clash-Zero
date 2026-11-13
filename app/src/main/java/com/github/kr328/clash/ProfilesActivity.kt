@@ -22,6 +22,11 @@ import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
 import com.github.kr328.clash.util.withProfile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
@@ -60,35 +65,83 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             } else {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                    val dao = Database.database.openProfileNodeDao()
-                                    val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
-                                    Clash.healthCheck("GLOBAL").await()
-                                    val runtimeGroup = Clash.queryGroup("GLOBAL", ProxySort.Default)
-                                    if (runtimeGroup.type == "Unknown") throw IllegalStateException("当前运行配置没有 GLOBAL 节点组")
-                                    val runtimeNodes = runtimeGroup.proxies.associateBy { proxy -> proxy.name }
-                                    val now = System.currentTimeMillis()
-                                    val oldOverrides = dao.queryOverrides(it.profile.uuid).associateBy { value -> value.nodeKey }
-                                    profileNodes.forEach { node ->
-                                        val old = oldOverrides[node.key]
-                                        val delay = runtimeNodes[node.name]?.delay?.takeIf { it > 0 }
-                                        dao.upsertOverride(
-                                            ProfileNodeOverride(
-                                                profileUuid = it.profile.uuid,
-                                                nodeKey = node.key,
-                                                originalName = node.name,
-                                                customName = old?.customName,
-                                                groupId = old?.groupId,
-                                                delayMs = delay,
-                                                testedAt = now,
-                                                testError = if (delay == null) "测速失败" else null
+                                        val dao = Database.database.openProfileNodeDao()
+                                        val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
+                                        if (profileNodes.isEmpty()) throw IllegalStateException("这个订阅没有可测速节点")
+                                        val semaphore = Semaphore(5)
+                                        val results = coroutineScope {
+                                            profileNodes.map { node ->
+                                                async(Dispatchers.IO) {
+                                                    semaphore.withPermit {
+                                                        node to runCatching {
+                                                            Clash.testProxy(node.name, "https://www.gstatic.com/generate_204", 5000)
+                                                        }
+                                                    }
+                                                }
+                                            }.awaitAll()
+                                        }
+                                        val oldOverrides = dao.queryOverrides(it.profile.uuid).associateBy { value -> value.nodeKey }
+                                        val now = System.currentTimeMillis()
+                                        results.forEach { (node, outcome) ->
+                                            val old = oldOverrides[node.key]
+                                            val tested = outcome.getOrNull()
+                                            val delay = tested?.delay?.takeIf { it > 0 }
+                                            val error = outcome.exceptionOrNull()?.message
+                                                ?: tested?.error
+                                                ?: if (delay == null) "测速失败" else null
+                                            dao.upsertOverride(
+                                                ProfileNodeOverride(
+                                                    profileUuid = it.profile.uuid,
+                                                    nodeKey = node.key,
+                                                    originalName = node.name,
+                                                    customName = old?.customName,
+                                                    groupId = old?.groupId,
+                                                    delayMs = delay,
+                                                    testedAt = now,
+                                                    testError = error
+                                                )
                                             )
-                                        )
+                                        }
                                     }
-                                }
                                     design.fetch()
                                     design.showToast("订阅节点测速完成。", ToastDuration.Long)
                                 } catch (error: Exception) {
                                     design.showToast("测速失败：${error.message ?: "未知错误"}", ToastDuration.Long)
+                                }
+                            }
+                        }
+                        is ProfilesDesign.Request.TestNode -> {
+                            if (!it.profile.active) {
+                                design.showToast("请先启用这个订阅，再进行测速。", ToastDuration.Long)
+                            } else {
+                                try {
+                                    val tested = withContext(Dispatchers.IO) {
+                                        Clash.testProxy(it.node.originalName, "https://www.gstatic.com/generate_204", 5000)
+                                    }
+                                    withContext(Dispatchers.IO) {
+                                        val dao = Database.database.openProfileNodeDao()
+                                        val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == it.node.key }
+                                        val delay = tested.delay.takeIf { it > 0 }
+                                        dao.upsertOverride(
+                                            ProfileNodeOverride(
+                                                profileUuid = it.profile.uuid,
+                                                nodeKey = it.node.key,
+                                                originalName = it.node.originalName,
+                                                customName = old?.customName,
+                                                groupId = old?.groupId,
+                                                delayMs = delay,
+                                                testedAt = System.currentTimeMillis(),
+                                                testError = tested.error ?: if (delay == null) "测速失败" else null
+                                            )
+                                        )
+                                    }
+                                    design.fetch()
+                                    design.showToast(
+                                        if (tested.delay > 0 && tested.error == null) "节点测速完成：${tested.delay} ms" else "节点测速失败：${tested.error ?: "连接超时或不可用"}",
+                                        ToastDuration.Long
+                                    )
+                                } catch (error: Exception) {
+                                    design.showToast("节点测速失败：${error.message ?: "未知错误"}", ToastDuration.Long)
                                 }
                             }
                         }
