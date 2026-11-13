@@ -33,6 +33,7 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
     private val self: NewProfileActivity
         get() = this
 
+    private var pendingQrName: String = ""
     private val scanLauncher = registerForActivityResult(ScanQRCode(), ::scanResultHandler)
 
     override suspend fun main() {
@@ -44,35 +45,30 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
 
         while (isActive) {
             select<Unit> {
-                events.onReceive {
-
-                }
+                events.onReceive { }
                 design.requests.onReceive {
                     when (it) {
                         is NewProfileDesign.Request.Create -> {
                             withProfile {
-                                val name = getString(R.string.new_profile)
+                                val defaultName = getString(R.string.new_profile)
+                                val requestedName = it.name.ifBlank { defaultName }
 
                                 val uuid: UUID? = when (val p = it.provider) {
                                     is ProfileProvider.File ->
-                                        create(Profile.Type.File, name)
+                                        create(Profile.Type.File, requestedName)
 
                                     is ProfileProvider.Url ->
-                                        create(Profile.Type.Url, name)
+                                        create(Profile.Type.Url, requestedName)
 
-                                    is ProfileProvider.QR -> {
-                                        null
-                                    }
+                                    is ProfileProvider.QR -> null
 
                                     is ProfileProvider.External -> {
                                         val data = p.get()
-
                                         if (data != null) {
                                             val (uri, initialName) = data
-
                                             create(
                                                 Profile.Type.External,
-                                                initialName ?: name,
+                                                it.name.ifBlank { initialName ?: requestedName },
                                                 uri.toString()
                                             )
                                         } else {
@@ -81,16 +77,14 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
                                     }
                                 }
 
-                                if (uuid != null)
-                                    launchProperties(uuid)
+                                if (uuid != null) launchProperties(uuid)
                             }
                         }
 
-                        is NewProfileDesign.Request.OpenDetail -> {
-                            launchAppDetailed(it.provider)
-                        }
+                        is NewProfileDesign.Request.OpenDetail -> launchAppDetailed(it.provider)
 
                         is NewProfileDesign.Request.LaunchScanner -> {
+                            pendingQrName = it.name
                             scanLauncher.launch(null)
                         }
                     }
@@ -105,7 +99,6 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
             provider.intent.component?.packageName ?: return,
             null
         )
-
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(data))
     }
 
@@ -114,9 +107,7 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
             ActivityResultContracts.StartActivityForResult(),
             PropertiesActivity::class.intent.setUUID(uuid)
         )
-
-        if (r.resultCode == Activity.RESULT_OK)
-            finish()
+        if (r.resultCode == Activity.RESULT_OK) finish()
     }
 
     private suspend fun ProfileProvider.External.get(): Pair<Uri, String?>? {
@@ -124,18 +115,10 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
             ActivityResultContracts.StartActivityForResult(),
             intent
         )
-
-        if (result.resultCode != RESULT_OK)
-            return null
-
+        if (result.resultCode != RESULT_OK) return null
         val uri = result.data?.data
         val name = result.data?.getStringExtra(Intents.EXTRA_NAME)
-
-        if (uri != null) {
-            return uri to name
-        }
-
-        return null
+        return if (uri != null) uri to name else null
     }
 
     private suspend fun queryProfileProviders(): List<ProfileProvider> {
@@ -145,21 +128,13 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
                 0
             ).map {
                 val activity = it.activityInfo
-
                 val name = activity.applicationInfo.loadLabel(packageManager)
                 val summary = activity.loadLabel(packageManager)
                 val icon = activity.loadIcon(packageManager)
                 val intent = Intent(Intents.ACTION_PROVIDE_URL)
-                    .setComponent(
-                        ComponentName(
-                            activity.packageName,
-                            activity.name
-                        )
-                    )
-
+                    .setComponent(ComponentName(activity.packageName, activity.name))
                 ProfileProvider.External(name.toString(), summary.toString(), icon, intent)
             }
-
             listOf(
                 ProfileProvider.File(self),
                 ProfileProvider.Url(self),
@@ -174,27 +149,24 @@ class NewProfileActivity : BaseActivity<NewProfileDesign>() {
                 is QRSuccess -> {
                     val url = result.content.rawValue
                         ?: result.content.rawBytes?.let { String(it) }.orEmpty()
-
-                    createProfileByQrCode(url)
+                    createProfileByQrCode(url, pendingQrName)
                 }
-
-                QRUserCanceled -> {}
+                QRUserCanceled -> Unit
                 QRMissingPermission -> design?.showExceptionToast(getString(R.string.import_from_qr_no_permission))
                 is QRError -> design?.showExceptionToast(getString(R.string.import_from_qr_exception))
             }
         }
     }
 
-    private suspend fun createProfileByQrCode(url: String) {
+    private suspend fun createProfileByQrCode(url: String, requestedName: String) {
         withProfile {
             launchProperties(
                 create(
                     type = Profile.Type.Url,
-                    name = getString(R.string.new_profile),
+                    name = requestedName.ifBlank { getString(R.string.new_profile) },
                     url,
                 )
             )
         }
     }
-
 }
