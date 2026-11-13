@@ -129,6 +129,12 @@ object Clash {
         Bridge.nativeHealthCheckAll()
     }
 
+    suspend fun testProxy(name: String, url: String, timeoutMs: Int): ProxyTestResult {
+        val result = CompletableDeferred<String>()
+        Bridge.nativeTestProxy(result, name, url, timeoutMs)
+        return Json.decodeFromString(ProxyTestResult.serializer(), result.await())
+    }
+
     fun patchSelector(selector: String, name: String): Boolean {
         return Bridge.nativePatchSelector(selector, name)
     }
