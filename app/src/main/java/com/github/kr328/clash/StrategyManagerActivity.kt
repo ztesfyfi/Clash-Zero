@@ -102,7 +102,8 @@ class StrategyManagerActivity : AppCompatActivity() {
         }
     }
 
-    private fun refresh() {
+    private fun refresh(apply: Boolean = false) {
+        if (apply) sendOverrideChanged()
         scope.launch {
             try {
                 content.removeAllViews()
@@ -159,7 +160,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     0 -> showNodeGroupEditor(group)
                     1 -> scope.launch {
                         database.openNodeGroupDao().upsert(group.copy(enabled = !group.enabled, updatedAt = System.currentTimeMillis()))
-                        refresh()
+                        refresh(apply = true)
                     }
                     2 -> scope.launch {
                         val usedBy = database.openStrategyGroupDao().queryParents(
@@ -169,7 +170,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                             toast("该节点组仍被策略组引用，请先从策略组成员中移除")
                         } else {
                             database.openNodeGroupDao().delete(group.id)
-                            refresh()
+                            refresh(apply = true)
                         }
                     }
                 }
@@ -217,7 +218,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                             updatedAt = System.currentTimeMillis()
                         ) ?: NodeGroup(name = groupName, mode = selectedMode, nameTag = nameTag, regionCode = regionCode)
                         database.openNodeGroupDao().upsert(group)
-                    }.onSuccess { refresh() }.onFailure { toast("保存失败：${it.message}") }
+                    }.onSuccess { refresh(apply = true) }.onFailure { toast("保存失败：${it.message}") }
                 }
             }.show()
     }
@@ -273,7 +274,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                 dialog.dismiss()
                 scope.launch {
                     runCatching { database.openStrategyGroupDao().upsert(saved) }
-                        .onSuccess { toast("代理策略已保存"); refresh() }
+                        .onSuccess { toast("代理策略已保存"); refresh(apply = true) }
                         .onFailure { toast("保存失败：${it.message}") }
                 }
             }
@@ -304,7 +305,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                             val member = members[index]
                             scope.launch {
                                 dao.removeMember(group.id, member.memberType, member.memberId)
-                                refresh()
+                                refresh(apply = true)
                             }
                         }
                         index < members.size + nodeGroups.size -> {
@@ -333,7 +334,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     group, members + StrategyGroupMember(group.id, type, id, members.size)
                 )
                 toast("成员已添加")
-                refresh()
+                refresh(apply = true)
             } catch (error: Exception) {
                 toast("未能添加：${error.message}")
             }
@@ -383,7 +384,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     scope.launch {
                         try {
                             StrategyConfigurationRepository(database).savePolicy(policy, listOf(condition))
-                            refresh()
+                            refresh(apply = true)
                         } catch (error: Exception) {
                             toast("保存失败：${error.message}")
                         }
@@ -429,14 +430,14 @@ class StrategyManagerActivity : AppCompatActivity() {
                         .setPositiveButton("删除") { _, _ ->
                             scope.launch {
                                 database.openRoutingPolicyDao().delete(policy.id)
-                                refresh()
+                                refresh(apply = true)
                             }
                         }.show()
                 }
                 .setNeutralButton(if (policy.enabled) "停用" else "启用") { _, _ ->
                     scope.launch {
                         database.openRoutingPolicyDao().setEnabled(policy.id, !policy.enabled)
-                        refresh()
+                        refresh(apply = true)
                     }
                 }
                 .setPositiveButton("保存") { _, _ ->
@@ -452,7 +453,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                         try {
                             StrategyConfigurationRepository(database).savePolicy(updated, conditions)
                             toast("策略已更新")
-                            refresh()
+                            refresh(apply = true)
                         } catch (error: Exception) {
                             toast("保存失败：${error.message}")
                         }
