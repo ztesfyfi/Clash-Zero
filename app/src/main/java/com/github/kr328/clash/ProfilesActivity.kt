@@ -61,11 +61,15 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                 withContext(Dispatchers.IO) {
                                     val dao = Database.database.openProfileNodeDao()
                                     val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
-                                    Clash.healthCheck("GLOBAL").await()
-                                    val runtimeNodes = Clash.queryGroup("GLOBAL", ProxySort.Default).proxies.associateBy { proxy -> proxy.name }
+                                    val groups = Clash.queryGroupNames(false)
+                                    val testGroup = groups.firstOrNull { name -> name == "GLOBAL" }
+                                        ?: throw IllegalStateException("当前运行配置没有 GLOBAL 测速组")
+                                    Clash.healthCheck(testGroup).await()
+                                    val runtimeNodes = Clash.queryGroup(testGroup, ProxySort.Default).proxies.associateBy { proxy -> proxy.name }
                                     val now = System.currentTimeMillis()
+                                    val oldOverrides = dao.queryOverrides(it.profile.uuid).associateBy { value -> value.nodeKey }
                                     profileNodes.forEach { node ->
-                                        val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == node.key }
+                                        val old = oldOverrides[node.key]
                                         val delay = runtimeNodes[node.name]?.delay?.takeIf { it > 0 }
                                         dao.upsertOverride(
                                             ProfileNodeOverride(
@@ -243,7 +247,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         displayName = override?.customName?.takeIf { it.isNotBlank() } ?: node.name,
                         type = node.type,
                         groupId = group?.id,
-                        groupName = group?.takeIf { it.enabled }?.name,
+                        groupName = group?.name,
                         delayText = when {
                             delayMs != null -> "$delayMs ms"
                             testedAt != null -> override?.testError ?: "测速失败"
