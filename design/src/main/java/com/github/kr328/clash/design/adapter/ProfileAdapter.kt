@@ -74,7 +74,7 @@ class ProfileAdapter(
         val profileNodes = nodes[profile.uuid].orEmpty()
         binding.nodeSummary.visibility = if (stage == 0) View.GONE else View.VISIBLE
         binding.nodeList.visibility = if (stage == 2) View.VISIBLE else View.GONE
-        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 未测试：${profileNodes.size} · 点击管理分组"
+        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：0 · 较慢：0 · 异常：0 · 未测试：${profileNodes.size} · 点击管理分组"
         holder.nodeAdapter.nodes = if (stage == 2) profileNodes else emptyList()
     }
 
