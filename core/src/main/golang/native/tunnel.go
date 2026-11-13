@@ -124,7 +124,7 @@ func testProxy(completable unsafe.Pointer, name C.c_string, url C.c_string, time
 		if err != nil {
 			result.Error = err.Error()
 		}
-		C.complete(completable, marshalJson(result))
+		C.complete_string(completable, marshalJson(result))
 		C.release_object(completable)
 	}(C.GoString(name), C.GoString(url), int(timeoutMs), completable)
 }
