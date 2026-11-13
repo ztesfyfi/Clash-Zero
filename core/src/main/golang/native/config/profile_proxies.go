@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/metacubex/mihomo/common/yaml"
 )
@@ -65,7 +66,13 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 	// Provider files are stored beneath this profile's providers directory by
 	// patchProviders. Parse them locally so subscriptions with proxy-providers
 	// expose their real node entries without consulting the active global core.
-	for providerName, provider := range raw.ProxyProvider {
+	providerNames := make([]string, 0, len(raw.ProxyProvider))
+	for providerName := range raw.ProxyProvider {
+		providerNames = append(providerNames, providerName)
+	}
+	sort.Strings(providerNames)
+	for _, providerName := range providerNames {
+		provider := raw.ProxyProvider[providerName]
 		providerPath, _ := provider["path"].(string)
 		if providerPath == "" {
 			continue
