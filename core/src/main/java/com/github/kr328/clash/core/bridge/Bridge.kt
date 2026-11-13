@@ -27,6 +27,12 @@ object Bridge {
     external fun nativeQueryGroup(name: String, sort: String): String?
     external fun nativeHealthCheck(completable: CompletableDeferred<Unit>, name: String)
     external fun nativeHealthCheckAll()
+    external fun nativeTestProxy(
+        completable: CompletableDeferred<String>,
+        name: String,
+        url: String,
+        timeoutMs: Int
+    )
     external fun nativePatchSelector(selector: String, name: String): Boolean
     external fun nativeFetchAndValid(
         completable: FetchCallback,
