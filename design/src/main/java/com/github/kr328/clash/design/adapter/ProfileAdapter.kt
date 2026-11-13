@@ -21,7 +21,6 @@ import java.util.UUID
 
 class ProfileAdapter(
     private val context: Context,
-    private val onClicked: (Profile) -> Unit,
     private val onMenuClicked: (Profile) -> Unit,
     private val onNodeClicked: (Profile, ProfileNodeItem) -> Unit,
     private val onManageGroups: () -> Unit,
