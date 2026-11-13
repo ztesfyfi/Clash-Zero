@@ -8,6 +8,13 @@ import com.github.kr328.clash.common.util.intent
 import com.github.kr328.clash.common.util.setUUID
 import com.github.kr328.clash.common.util.ticker
 import com.github.kr328.clash.design.ProfilesDesign
+import com.github.kr328.clash.core.Clash
+import com.github.kr328.clash.design.model.ProfileNodeItem
+import com.github.kr328.clash.design.model.ProfileNodeGroupItem
+import com.github.kr328.clash.service.data.Database
+import com.github.kr328.clash.service.data.ProfileNodeGroup
+import com.github.kr328.clash.service.data.ProfileNodeOverride
+import com.github.kr328.clash.service.util.importedDir
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
 import com.github.kr328.clash.util.withProfile
@@ -42,6 +49,64 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                     when (it) {
                         ProfilesDesign.Request.Create ->
                             startActivity(NewProfileActivity::class.intent)
+                        ProfilesDesign.Request.ManageGroups ->
+                            design.showNodeGroupManager()
+                        is ProfilesDesign.Request.RenameNode -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openProfileNodeDao()
+                            val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == it.node.key }
+                            dao.upsertOverride(
+                                ProfileNodeOverride(
+                                    it.profile.uuid, it.node.key, it.node.originalName,
+                                    it.name.takeIf { name -> name.isNotBlank() && name != it.node.originalName },
+                                    old?.groupId
+                                )
+                            )
+                            design.fetch()
+                        }
+                        is ProfilesDesign.Request.SetNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openProfileNodeDao()
+                            val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == it.node.key }
+                            dao.upsertOverride(
+                                ProfileNodeOverride(
+                                    it.profile.uuid, it.node.key, it.node.originalName,
+                                    old?.customName, it.groupId
+                                )
+                            )
+                            design.fetch()
+                        }
+                        is ProfilesDesign.Request.CreateNodeGroup -> withContext(Dispatchers.IO) {
+                            val name = it.name.trim()
+                            if (name.isNotEmpty()) {
+                                val dao = Database.database.openProfileNodeDao()
+                                val groups = dao.queryGroups()
+                                if (groups.none { group -> group.name.equals(name, true) }) {
+                                    dao.upsertGroup(
+                                        ProfileNodeGroup(
+                                            id = UUID.randomUUID().toString(),
+                                            name = name,
+                                            isPreset = false,
+                                            enabled = true,
+                                            sortOrder = (groups.maxOfOrNull { group -> group.sortOrder } ?: 0) + 10
+                                        )
+                                    )
+                                }
+                            }
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.EnableNodeGroup -> withContext(Dispatchers.IO) {
+                            Database.database.openProfileNodeDao().setGroupEnabled(it.id, it.enabled)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.DeleteNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openProfileNodeDao()
+                            dao.clearGroupAssignments(it.id)
+                            dao.deleteGroup(it.id)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        ProfilesDesign.Request.Refresh -> design.fetch()
                         ProfilesDesign.Request.UpdateAll ->
                             withProfile {
                                 try {
@@ -89,9 +154,35 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
     }
 
     private suspend fun ProfilesDesign.fetch() {
-        withProfile {
-            patchProfiles(queryAll())
+        val profiles = withProfile { queryAll() }
+        val dao = Database.database.openProfileNodeDao()
+        val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
+        val groupById = groups.associateBy { it.id }
+        val nodeMap = withContext(Dispatchers.IO) {
+            profiles.filter { it.imported }.associate { profile ->
+                val rawNodes = runCatching {
+                    Clash.queryProfileProxies(importedDir.resolve(profile.uuid.toString()))
+                }.getOrDefault(emptyList())
+                val overrides = dao.queryOverrides(profile.uuid).associateBy { it.nodeKey }
+                profile.uuid to rawNodes.map { node ->
+                    val override = overrides[node.key]
+                    val group = override?.groupId?.let(groupById::get)
+                    ProfileNodeItem(
+                        key = node.key,
+                        originalName = node.name,
+                        displayName = override?.customName?.takeIf { it.isNotBlank() } ?: node.name,
+                        type = node.type,
+                        groupId = group?.id,
+                        groupName = group?.takeIf { it.enabled }?.name,
+                    )
+                }
+            }
         }
+        patchProfiles(
+            profiles,
+            nodeMap,
+            groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) }
+        )
     }
 
     override fun onProfileUpdateCompleted(uuid: UUID?) {
