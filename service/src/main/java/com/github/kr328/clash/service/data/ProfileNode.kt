@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.TypeConverters
 import java.util.UUID
 
 @Entity(tableName = "profile_node_groups", indices = [Index(value = ["sortOrder"])])
@@ -20,6 +21,7 @@ data class ProfileNodeGroup(
     primaryKeys = ["profileUuid", "nodeKey"],
     indices = [Index(value = ["groupId"])],
 )
+@TypeConverters(Converters::class)
 data class ProfileNodeOverride(
     @ColumnInfo(name = "profileUuid") val profileUuid: UUID,
     @ColumnInfo(name = "nodeKey") val nodeKey: String,
