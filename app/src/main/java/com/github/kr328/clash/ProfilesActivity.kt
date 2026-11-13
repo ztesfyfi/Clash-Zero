@@ -258,7 +258,8 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         },
                         delayState = when {
                             delayMs == null && testedAt == null -> "UNTESTED"
-                            delayMs == null -> "ERROR"
+                            delayMs == null && testedAt != null -> "FAILED"
+                            delayMs == null -> "UNTESTED"
                             goodThreshold != null && delayMs <= goodThreshold -> "GOOD"
                             slowThreshold != null && delayMs <= slowThreshold -> "SLOW"
                             goodThreshold != null && slowThreshold != null -> "ERROR"
