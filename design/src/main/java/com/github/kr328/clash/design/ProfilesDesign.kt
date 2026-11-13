@@ -4,11 +4,15 @@ import android.app.Dialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.text.InputType
+import android.widget.EditText
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import com.github.kr328.clash.design.adapter.ProfileAdapter
+import com.github.kr328.clash.design.model.ProfileNodeItem
+import com.github.kr328.clash.design.model.ProfileNodeGroupItem
 import com.github.kr328.clash.design.databinding.DesignProfilesBinding
 import com.github.kr328.clash.design.databinding.DialogProfilesMenuBinding
 import com.github.kr328.clash.design.databinding.DialogProfileQrCodeBinding
@@ -29,6 +33,13 @@ import kotlin.coroutines.resume
 class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context) {
     sealed class Request {
         object UpdateAll : Request()
+        object ManageGroups : Request()
+        data class RenameNode(val profile: Profile, val node: ProfileNodeItem, val name: String) : Request()
+        data class SetNodeGroup(val profile: Profile, val node: ProfileNodeItem, val groupId: String?) : Request()
+        data class CreateNodeGroup(val name: String) : Request()
+        data class DeleteNodeGroup(val id: String) : Request()
+        data class EnableNodeGroup(val id: String, val enabled: Boolean) : Request()
+        object Refresh : Request()
         object Create : Request()
         data class Active(val profile: Profile) : Request()
         data class Update(val profile: Profile) : Request()
@@ -40,7 +51,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
 
     private val binding = DesignProfilesBinding
         .inflate(context.layoutInflater, context.root, false)
-    private val adapter = ProfileAdapter(context, this::requestActive, this::showMenu)
+    private var nodeGroups: List<ProfileNodeGroupItem> = emptyList()
+    private val adapter = ProfileAdapter(
+        context, this::requestActive, this::showMenu, this::showNodeDetails,
+        { requests.trySend(Request.ManageGroups) }
+    )
 
     private var allUpdating: Boolean
         get() = adapter.states.allUpdating;
@@ -52,7 +67,13 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     override val root: View
         get() = binding.root
 
-    suspend fun patchProfiles(profiles: List<Profile>) {
+    suspend fun patchProfiles(
+        profiles: List<Profile>,
+        nodes: Map<java.util.UUID, List<ProfileNodeItem>> = emptyMap(),
+        groups: List<ProfileNodeGroupItem> = emptyList(),
+    ) {
+        nodeGroups = groups
+        adapter.setNodes(nodes)
         adapter.apply {
             patchDataSet(this::profiles, profiles, id = { it.uuid })
         }
@@ -188,6 +209,78 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                 continuation.invokeOnCancellation { dialog.dismiss() }
             }
         }
+    }
+
+    fun showNodeDetails(profile: Profile, node: ProfileNodeItem) {
+        val group = node.groupName ?: "未分组"
+        MaterialAlertDialogBuilder(context)
+            .setTitle(node.displayName)
+            .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：未测试\n节点标识：${node.key}")
+            .setPositiveButton("重命名") { _, _ -> showRenameNode(profile, node) }
+            .setNegativeButton("分组") { _, _ -> showNodeGroupPicker(profile, node) }
+            .setNeutralButton(R.string.close, null)
+            .show()
+    }
+
+    private fun showRenameNode(profile: Profile, node: ProfileNodeItem) {
+        val input = EditText(context).apply {
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setText(node.displayName)
+            setSelection(text.length)
+        }
+        MaterialAlertDialogBuilder(context)
+            .setTitle("重命名节点")
+            .setView(input)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                requests.trySend(Request.RenameNode(profile, node, input.text.toString().trim()))
+            }
+            .show()
+    }
+
+    private fun showNodeGroupPicker(profile: Profile, node: ProfileNodeItem) {
+        val enabled = nodeGroups.filter { it.enabled }
+        val labels = listOf("不分组") + enabled.map { it.name }
+        MaterialAlertDialogBuilder(context)
+            .setTitle("选择节点分组")
+            .setItems(labels.toTypedArray()) { _, which ->
+                requests.trySend(Request.SetNodeGroup(profile, node, if (which == 0) null else enabled[which - 1].id))
+            }
+            .setNeutralButton("分组管理") { _, _ -> requests.trySend(Request.ManageGroups) }
+            .show()
+    }
+
+    fun showNodeGroupManager() {
+        val groups = nodeGroups
+        val labels = groups.map { if (it.enabled) "✓ ${it.name}" else "○ ${it.name}" }.toTypedArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle("节点分组管理")
+            .setItems(labels) { _, which ->
+                val group = groups[which]
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(group.name)
+                    .setItems(arrayOf(if (group.enabled) "停用分组" else "启用分组", "删除分组")) { _, action ->
+                        if (action == 0) requests.trySend(Request.EnableNodeGroup(group.id, !group.enabled))
+                        else requests.trySend(Request.DeleteNodeGroup(group.id))
+                    }
+                    .show()
+            }
+            .setPositiveButton("新建分组") { _, _ -> showCreateNodeGroup() }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun showCreateNodeGroup() {
+        val input = EditText(context).apply { setSingleLine(true); hint = "分组名称" }
+        MaterialAlertDialogBuilder(context)
+            .setTitle("新建节点分组")
+            .setView(input)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                requests.trySend(Request.CreateNodeGroup(input.text.toString().trim()))
+            }
+            .show()
     }
 
     private fun changeUpdateAllButtonStatus() {
