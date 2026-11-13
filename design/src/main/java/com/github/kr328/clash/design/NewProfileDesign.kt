@@ -9,9 +9,9 @@ import com.github.kr328.clash.design.util.*
 
 class NewProfileDesign(context: Context) : Design<NewProfileDesign.Request>(context) {
     sealed class Request {
-        data class Create(val provider: ProfileProvider) : Request()
+        data class Create(val provider: ProfileProvider, val name: String) : Request()
         data class OpenDetail(val provider: ProfileProvider.External) : Request()
-        data class LaunchScanner(val provider: ProfileProvider.QR) : Request()
+        data class LaunchScanner(val provider: ProfileProvider.QR, val name: String) : Request()
     }
 
     private val binding = DesignNewProfileBinding
@@ -20,6 +20,8 @@ class NewProfileDesign(context: Context) : Design<NewProfileDesign.Request>(cont
 
     override val root: View
         get() = binding.root
+
+    fun profileName(): String = binding.profileName.text?.toString()?.trim().orEmpty()
 
     suspend fun patchProviders(providers: List<ProfileProvider>) {
         adapter.apply {
@@ -39,12 +41,12 @@ class NewProfileDesign(context: Context) : Design<NewProfileDesign.Request>(cont
     }
 
     private fun requestCreate(provider: ProfileProvider) {
+        val name = profileName()
         if (provider is ProfileProvider.QR) {
-            requests.trySend(Request.LaunchScanner(provider))
+            requests.trySend(Request.LaunchScanner(provider, name))
         } else {
-            requests.trySend(Request.Create(provider))
+            requests.trySend(Request.Create(provider, name))
         }
-
     }
 
     private fun requestDetail(provider: ProfileProvider): Boolean {
