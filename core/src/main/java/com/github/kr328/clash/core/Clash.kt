@@ -165,6 +165,15 @@ object Clash {
         }
     }
 
+    fun queryProfileProxies(path: File): List<ProfileProxy> {
+        val result = Json.decodeFromString(
+            ProfileProxyResult.serializer(),
+            Bridge.nativeQueryProfileProxies(path.absolutePath)
+        )
+        result.error?.let { throw IllegalStateException(it) }
+        return result.nodes
+    }
+
     fun load(path: File): CompletableDeferred<Unit> {
         return CompletableDeferred<Unit>().apply {
             Bridge.nativeLoad(this, path.absolutePath)
