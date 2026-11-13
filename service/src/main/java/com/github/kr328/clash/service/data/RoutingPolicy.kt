@@ -86,6 +86,5 @@ data class PolicyCondition(
         const val GEOSITE = "GEOSITE"
         const val IP_SET = "IP_SET"
         const val DOMAIN_SET = "DOMAIN_SET"
-        const val PROCESS_PACKAGE = "PROCESS_PACKAGE"
     }
 }
