@@ -23,7 +23,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
-            android:text='@{node.type + " · " + (node.groupName == null ? "未分组" : node.groupName) + " · 未测试"}'
+            android:text='@{node.type + " · " + (node.groupName == null ? "未分组" : node.groupName)}'
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
+        <TextView
+            android:id="@+id/node_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
             android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
     </LinearLayout>
 </layout>
