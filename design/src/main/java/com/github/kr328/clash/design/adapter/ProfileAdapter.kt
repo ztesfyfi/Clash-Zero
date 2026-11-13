@@ -1,56 +1,80 @@
 package com.github.kr328.clash.design.adapter
 
 import android.content.Context
+import android.view.View
 import android.view.ViewGroup
+import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.kr328.clash.design.R
 import com.github.kr328.clash.design.databinding.AdapterProfileBinding
+import com.github.kr328.clash.design.model.ProfileNodeItem
 import com.github.kr328.clash.design.model.ProfilePageState
-import com.github.kr328.clash.design.model.ProxyPageState
 import com.github.kr328.clash.design.ui.ObservableCurrentTime
 import com.github.kr328.clash.design.util.layoutInflater
 import com.github.kr328.clash.service.model.Profile
+import java.util.UUID
 
 class ProfileAdapter(
     private val context: Context,
     private val onClicked: (Profile) -> Unit,
     private val onMenuClicked: (Profile) -> Unit,
+    private val onNodeClicked: (Profile, ProfileNodeItem) -> Unit,
+    private val onManageGroups: () -> Unit,
 ) : RecyclerView.Adapter<ProfileAdapter.Holder>() {
-    class Holder(val binding: AdapterProfileBinding) : RecyclerView.ViewHolder(binding.root)
+    class Holder(
+        val binding: AdapterProfileBinding,
+        val nodeAdapter: ProfileNodeAdapter,
+    ) : RecyclerView.ViewHolder(binding.root)
 
     private val currentTime = ObservableCurrentTime()
-
     var profiles: List<Profile> = emptyList()
     val states = ProfilePageState()
+    private val nodes = mutableMapOf<UUID, List<ProfileNodeItem>>()
+    private val expanded = mutableMapOf<UUID, Int>()
+
+    fun setNodes(value: Map<UUID, List<ProfileNodeItem>>) {
+        nodes.clear()
+        nodes.putAll(value)
+        notifyDataSetChanged()
+    }
 
     fun updateElapsed() {
         currentTime.update()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
-        return Holder(
-            AdapterProfileBinding
-                .inflate(context.layoutInflater, parent, false)
-                .also { it.currentTime = currentTime }
-        )
+        val binding = AdapterProfileBinding
+            .inflate(context.layoutInflater, parent, false)
+            .also { it.currentTime = currentTime }
+        val nodeAdapter = ProfileNodeAdapter(context) { node ->
+            val position = bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) onNodeClicked(profiles[position], node)
+        }
+        binding.nodeList.layoutManager = LinearLayoutManager(context)
+        binding.nodeList.adapter = nodeAdapter
+        binding.nodeSummary.setOnClickListener { onManageGroups() }
+        return Holder(binding, nodeAdapter)
     }
 
     override fun onBindViewHolder(holder: Holder, position: Int) {
-        val current = profiles[position]
+        val profile = profiles[position]
         val binding = holder.binding
-
-        if (current === binding.profile)
-            return
-
-        binding.profile = current
+        binding.profile = profile
         binding.setClicked {
-            onClicked(current)
+            val stage = (expanded[profile.uuid] ?: 0)
+            expanded[profile.uuid] = when (stage) { 0 -> 1; 1 -> 2; else -> 0 }
+            notifyItemChanged(position)
         }
-        binding.setMenu {
-            onMenuClicked(current)
-        }
+        binding.setMenu { onMenuClicked(profile) }
+
+        val stage = expanded[profile.uuid] ?: 0
+        val profileNodes = nodes[profile.uuid].orEmpty()
+        binding.nodeSummary.visibility = if (stage == 0) View.GONE else View.VISIBLE
+        binding.nodeList.visibility = if (stage == 2) View.VISIBLE else View.GONE
+        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 未测试：${profileNodes.size} · 点击管理分组"
+        holder.nodeAdapter.nodes = if (stage == 2) profileNodes else emptyList()
     }
 
-    override fun getItemCount(): Int {
-        return profiles.size
-    }
+    override fun getItemCount(): Int = profiles.size
 }
