@@ -107,7 +107,7 @@ object StrategyConfigCompiler {
                 PolicyCondition.IP, PolicyCondition.IP_CIDR -> "IP-CIDR"
                 PolicyCondition.GEOIP -> "GEOIP"
                 PolicyCondition.GEOSITE -> "GEOSITE"
-                else -> error("目标分流包含不支持的匹配类型：\${condition.matcherType}")
+                else -> error("目标分流包含不支持的匹配类型：" + condition.matcherType)
             }
             var value = condition.matcherValue.trim()
             if (condition.matcherType == PolicyCondition.IP && !value.contains('/')) {
@@ -124,11 +124,11 @@ object StrategyConfigCompiler {
                 RoutingPolicy.TARGET_DIRECT -> "DIRECT"
                 RoutingPolicy.TARGET_REJECT -> "REJECT"
                 RoutingPolicy.TARGET_STRATEGY_GROUP -> strategyNames[policy.targetId] ?: continue
-                else -> error("目标分流“\${policy.name}”包含不支持的出口类型")
+                else -> error("目标分流“" + policy.name + "”包含不支持的出口类型")
             }
             val expressions = conditions.map(::matcherExpression)
             if (policy.matchMode == RoutingPolicy.MATCH_ALL) {
-                rules.put("AND,(($\{expressions.joinToString("),(")})),$target")
+                rules.put("AND,((" + expressions.joinToString("),(") + "))," + target)
             } else {
                 expressions.forEach { rules.put("$it,$target") }
             }
