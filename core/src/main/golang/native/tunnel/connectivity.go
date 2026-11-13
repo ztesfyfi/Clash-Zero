@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
-	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 	mihomoTunnel "github.com/metacubex/mihomo/tunnel"
