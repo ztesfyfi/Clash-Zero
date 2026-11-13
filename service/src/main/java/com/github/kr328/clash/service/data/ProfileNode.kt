@@ -38,4 +38,5 @@ data class ProfileNodeSettings(
     @PrimaryKey @ColumnInfo(name = "id") val id: Int = 1,
     @ColumnInfo(name = "goodThresholdMs") val goodThresholdMs: Int? = null,
     @ColumnInfo(name = "slowThresholdMs") val slowThresholdMs: Int? = null,
+    @ColumnInfo(name = "presetsInitialized") val presetsInitialized: Boolean = false,
 )
