@@ -35,6 +35,8 @@ object Bridge {
         force: Boolean
     )
 
+    external fun nativeQueryProfileProxies(path: String): String
+
     external fun nativeLoad(completable: CompletableDeferred<Unit>, path: String)
     external fun nativeQueryProviders(): String
     external fun nativeUpdateProvider(
