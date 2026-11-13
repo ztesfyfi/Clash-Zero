@@ -157,12 +157,40 @@ private val MIGRATION_5_6 = object : Migration(5, 6) {
     }
 }
 
+private val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        // Remove only legacy Android app-match conditions. Preserve other conditions
+        // belonging to the same policy and disable policies left without conditions.
+        database.execSQL(
+            """
+            CREATE TEMP TABLE legacy_app_policy_ids AS
+            SELECT DISTINCT policyId FROM policy_conditions
+            WHERE matcherType = 'PROCESS_PACKAGE'
+            """.trimIndent()
+        )
+        database.execSQL("DELETE FROM policy_conditions WHERE matcherType = 'PROCESS_PACKAGE'")
+        database.execSQL(
+            """
+            UPDATE routing_policies
+            SET enabled = 0, updatedAt = strftime('%s','now') * 1000
+            WHERE id IN (SELECT policyId FROM legacy_app_policy_ids)
+              AND NOT EXISTS (
+                  SELECT 1 FROM policy_conditions
+                  WHERE policy_conditions.policyId = routing_policies.id
+              )
+            """.trimIndent()
+        )
+        database.execSQL("DROP TABLE legacy_app_policy_ids")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
     MIGRATION_3_4,
     MIGRATION_4_5,
     MIGRATION_5_6,
+    MIGRATION_6_7,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
