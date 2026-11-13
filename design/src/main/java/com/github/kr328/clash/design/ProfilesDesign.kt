@@ -31,6 +31,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import kotlin.coroutines.resume
 
 class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context) {
