@@ -19,8 +19,11 @@ interface ProfileNodeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertGroup(group: ProfileNodeGroup)
 
-    @Query("DELETE FROM profile_node_groups WHERE id = :id AND isPreset = 0")
-    suspend fun deleteCustomGroup(id: String)
+    @Query("DELETE FROM profile_node_groups WHERE id = :id")
+    suspend fun deleteGroup(id: String)
+
+    @Query("UPDATE profile_node_overrides SET groupId = NULL WHERE groupId = :id")
+    suspend fun clearGroupAssignments(id: String)
 
     @Query("UPDATE profile_node_groups SET enabled = :enabled WHERE id = :id")
     suspend fun setGroupEnabled(id: String, enabled: Boolean)
