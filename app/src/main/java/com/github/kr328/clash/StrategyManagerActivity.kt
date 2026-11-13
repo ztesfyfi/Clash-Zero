@@ -23,6 +23,7 @@ import com.github.kr328.clash.service.data.RoutingPolicy
 import com.github.kr328.clash.service.data.StrategyConfigurationRepository
 import com.github.kr328.clash.service.data.StrategyGroup
 import com.github.kr328.clash.service.data.StrategyGroupMember
+import com.github.kr328.clash.service.util.sendOverrideChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
