@@ -35,11 +35,14 @@ class ProfileAdapter(
     var profiles: List<Profile> = emptyList()
     val states = ProfilePageState()
     private val nodes = mutableMapOf<UUID, List<ProfileNodeItem>>()
+    private val nodeErrors = mutableMapOf<UUID, String>()
     private val expanded = mutableMapOf<UUID, Int>()
 
-    fun setNodes(value: Map<UUID, List<ProfileNodeItem>>) {
+    fun setNodes(value: Map<UUID, List<ProfileNodeItem>>, errors: Map<UUID, String>) {
         nodes.clear()
         nodes.putAll(value)
+        nodeErrors.clear()
+        nodeErrors.putAll(errors)
         notifyDataSetChanged()
     }
 
@@ -80,16 +83,21 @@ class ProfileAdapter(
 
         val stage = expanded[profile.uuid] ?: 0
         val profileNodes = nodes[profile.uuid].orEmpty()
+        val nodeError = nodeErrors[profile.uuid]
         binding.nodeSummary.visibility = if (stage == 0) View.GONE else View.VISIBLE
-        binding.nodeList.visibility = if (stage == 2) View.VISIBLE else View.GONE
-        binding.nodeTest.visibility = if (stage > 0) View.VISIBLE else View.GONE
+        binding.nodeList.visibility = if (stage == 2 && nodeError == null) View.VISIBLE else View.GONE
+        binding.nodeTest.visibility = if (stage > 0 && nodeError == null && profileNodes.isNotEmpty()) View.VISIBLE else View.GONE
         val good = profileNodes.count { it.delayState == "GOOD" }
         val slow = profileNodes.count { it.delayState == "SLOW" }
         val error = profileNodes.count { it.delayState == "ERROR" }
         val tested = profileNodes.count { it.delayState == "TESTED" }
         val failed = profileNodes.count { it.delayState == "FAILED" }
         val untested = profileNodes.count { it.delayState == "UNTESTED" }
-        val summary = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 已测速：${tested} · 失败/超时：${failed} · 未测试：${untested} · 点击管理分组"
+        val summary = if (nodeError != null) {
+            "节点读取失败：$nodeError"
+        } else {
+            "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 已测速：${tested} · 失败/超时：${failed} · 未测试：${untested} · 点击管理分组"
+        }
         val styled = SpannableString(summary)
         fun tint(label: String, color: Int) {
             val start = summary.indexOf(label)
