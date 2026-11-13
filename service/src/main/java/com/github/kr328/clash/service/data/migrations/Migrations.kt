@@ -222,6 +222,7 @@ private val MIGRATION_8_9 = object : Migration(8, 9) {
                 id INTEGER NOT NULL,
                 goodThresholdMs INTEGER,
                 slowThresholdMs INTEGER,
+                presetsInitialized INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(id)
             )
         """.trimIndent())
