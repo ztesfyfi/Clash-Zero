@@ -19,7 +19,6 @@ object StrategyConfigCompiler {
         val nodeGroups = database.openNodeGroupDao().queryAll().filter { it.enabled }
         val strategies = database.openStrategyGroupDao().queryAll().filter { it.enabled }
         val policies = database.openRoutingPolicyDao().queryAll().filter { it.enabled }
-        val ruleSets = database.openRuleSetDao().queryAll().filter { it.enabled }
 
         val nodeGroupIds = nodeGroups.map { it.id }.toSet()
         val strategyIds = strategies.map { it.id }.toSet()
@@ -96,39 +95,43 @@ object StrategyConfigCompiler {
         }
 
         val rules = JSONArray()
-        for (policy in policies.sortedWith(compareBy<RoutingPolicy> { it.priority }.thenBy { it.createdAt })) {
-            val conditions = database.openRoutingPolicyDao().queryConditions(policy.id)
-            require(conditions.isNotEmpty()) { "目标分流“${policy.name}”没有匹配条件，已阻止生成宽泛规则" }
-            require(conditions.size == 1 && !conditions.first().negated) {
-                "目标分流“${policy.name}”包含复杂 AND/OR/NOT 条件，当前版本暂不支持安全编译"
-            }
-            val condition = conditions.first()
+        fun matcherExpression(condition: PolicyCondition): String {
             require(condition.matcherType != PolicyCondition.IP_SET &&
                 condition.matcherType != PolicyCondition.DOMAIN_SET) {
-                "目标分流“${policy.name}”引用规则集；规则集提供器尚未接入配置生成"
-            }
-            val target = when (policy.targetType) {
-                RoutingPolicy.TARGET_DIRECT -> "DIRECT"
-                RoutingPolicy.TARGET_REJECT -> "REJECT"
-                RoutingPolicy.TARGET_STRATEGY_GROUP ->
-                    strategyNames[policy.targetId] ?: continue
-                else -> error("目标分流“${policy.name}”包含不支持的出口类型")
+                "目标分流引用规则集；规则集提供器尚未接入配置生成"
             }
             val type = when (condition.matcherType) {
                 PolicyCondition.DOMAIN -> "DOMAIN"
                 PolicyCondition.DOMAIN_SUFFIX -> "DOMAIN-SUFFIX"
                 PolicyCondition.DOMAIN_KEYWORD -> "DOMAIN-KEYWORD"
-                PolicyCondition.IP -> "IP-CIDR"
-                PolicyCondition.IP_CIDR -> "IP-CIDR"
+                PolicyCondition.IP, PolicyCondition.IP_CIDR -> "IP-CIDR"
                 PolicyCondition.GEOIP -> "GEOIP"
                 PolicyCondition.GEOSITE -> "GEOSITE"
-                else -> error("目标分流“${policy.name}”包含不支持的匹配类型")
+                else -> error("目标分流包含不支持的匹配类型：\${condition.matcherType}")
             }
             var value = condition.matcherValue.trim()
             if (condition.matcherType == PolicyCondition.IP && !value.contains('/')) {
                 value += if (value.contains(':')) "/128" else "/32"
             }
-            rules.put("$type,$value,$target")
+            val expression = "$type,$value"
+            return if (condition.negated) "NOT,(($expression))" else expression
+        }
+
+        for (policy in policies.sortedWith(compareBy<RoutingPolicy> { it.priority }.thenBy { it.createdAt })) {
+            val conditions = database.openRoutingPolicyDao().queryConditions(policy.id)
+            if (conditions.isEmpty()) continue
+            val target = when (policy.targetType) {
+                RoutingPolicy.TARGET_DIRECT -> "DIRECT"
+                RoutingPolicy.TARGET_REJECT -> "REJECT"
+                RoutingPolicy.TARGET_STRATEGY_GROUP -> strategyNames[policy.targetId] ?: continue
+                else -> error("目标分流“\${policy.name}”包含不支持的出口类型")
+            }
+            val expressions = conditions.map(::matcherExpression)
+            if (policy.matchMode == RoutingPolicy.MATCH_ALL) {
+                rules.put("AND,(($\{expressions.joinToString("),(")})),$target")
+            } else {
+                expressions.forEach { rules.put("$it,$target") }
+            }
         }
 
         val overlay = JSONObject()
