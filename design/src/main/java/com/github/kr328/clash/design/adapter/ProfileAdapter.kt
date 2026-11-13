@@ -2,6 +2,9 @@ package com.github.kr328.clash.design.adapter
 
 import android.content.Context
 import android.view.View
+import android.graphics.Color
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -86,7 +89,18 @@ class ProfileAdapter(
         val tested = profileNodes.count { it.delayState == "TESTED" }
         val failed = profileNodes.count { it.delayState == "FAILED" }
         val untested = profileNodes.count { it.delayState == "UNTESTED" }
-        binding.nodeSummary.text = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 已测速：${tested} · 失败/超时：${failed} · 未测试：${untested} · 点击管理分组"
+        val summary = "节点总数：${profileNodes.size} · 正常：${good} · 较慢：${slow} · 异常：${error} · 已测速：${tested} · 失败/超时：${failed} · 未测试：${untested} · 点击管理分组"
+        val styled = SpannableString(summary)
+        fun tint(label: String, color: Int) {
+            val start = summary.indexOf(label)
+            if (start >= 0) styled.setSpan(ForegroundColorSpan(color), start, start + label.length, SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        tint("正常：${good}", Color.rgb(46, 125, 50))
+        tint("较慢：${slow}", Color.rgb(245, 158, 11))
+        tint("异常：${error}", Color.rgb(211, 47, 47))
+        tint("失败/超时：${failed}", Color.GRAY)
+        tint("未测试：${untested}", Color.GRAY)
+        binding.nodeSummary.text = styled
         holder.nodeAdapter.nodes = if (stage == 2) profileNodes else emptyList()
     }
 
