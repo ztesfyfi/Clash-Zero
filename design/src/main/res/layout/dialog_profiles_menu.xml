@@ -20,6 +20,15 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+        <com.github.kr328.clash.design.view.LargeActionLabel
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:onClick="@{() -> master.requestActive(self, profile)}"
+            android:padding="@dimen/bottom_sheet_menu_items_padding"
+            android:visibility="@{profile.imported ? View.VISIBLE : View.GONE}"
+            app:icon="@drawable/ic_baseline_check"
+            app:text="设为当前订阅" />
+
 
         <com.github.kr328.clash.design.view.LargeActionLabel
             android:layout_width="match_parent"
