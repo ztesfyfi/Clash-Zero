@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/dlclark/regexp2"
@@ -25,6 +27,7 @@ var processors = []processor{
 	patchTun,
 	patchListeners,
 	patchProviders,
+	patchStrategy,
 	validConfig,
 }
 
@@ -119,6 +122,34 @@ func patchProviders(cfg *config.RawConfig, profileDir string) error {
 		provider["path"] = profileDir + "/providers/" + path
 	})
 
+	return nil
+}
+
+
+func patchStrategy(cfg *config.RawConfig, profileDir string) error {
+	strategyPath := filepath.Join(profileDir, "strategy.json")
+	data, err := os.ReadFile(strategyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read generated strategy overlay: %w", err)
+	}
+
+	var overlay struct {
+		ProxyGroups []map[string]any `json:"proxy-groups"`
+		Rules       []string         `json:"rules"`
+	}
+	if err := json.Unmarshal(data, &overlay); err != nil {
+		return fmt.Errorf("decode generated strategy overlay: %w", err)
+	}
+
+	cfg.ProxyGroup = append(cfg.ProxyGroup, overlay.ProxyGroups...)
+	if len(overlay.Rules) > 0 {
+		// User-defined rules have explicit priorities and must precede base
+		// profile rules, including a terminal MATCH rule.
+		cfg.Rule = append(append([]string{}, overlay.Rules...), cfg.Rule...)
+	}
 	return nil
 }
 
