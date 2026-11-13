@@ -315,7 +315,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                 val slowValue = slow.text.toString().toIntOrNull()
                 if ((goodValue == null) != (slowValue == null) ||
                     (goodValue != null && slowValue != null && (goodValue <= 0 || slowValue <= goodValue))) {
-                    showToast("阈值无效，请检查两个毫秒数值。", ToastDuration.Long)
+                    launch { showToast("阈值无效，请检查两个毫秒数值。", ToastDuration.Long) }
                 } else {
                     requests.trySend(Request.SetDelayThresholds(goodValue, slowValue))
                 }
