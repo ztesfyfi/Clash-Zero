@@ -58,14 +58,14 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             if (!it.profile.active) {
                                 design.showToast("请先启用这个订阅，再进行测速。", ToastDuration.Long)
                             } else {
-                                withContext(Dispatchers.IO) {
+                                try {
+                                    withContext(Dispatchers.IO) {
                                     val dao = Database.database.openProfileNodeDao()
                                     val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
-                                    val groups = Clash.queryGroupNames(false)
-                                    val testGroup = groups.firstOrNull { name -> name == "GLOBAL" }
-                                        ?: throw IllegalStateException("当前运行配置没有 GLOBAL 测速组")
-                                    Clash.healthCheck(testGroup).await()
-                                    val runtimeNodes = Clash.queryGroup(testGroup, ProxySort.Default).proxies.associateBy { proxy -> proxy.name }
+                                    Clash.healthCheck("GLOBAL").await()
+                                    val runtimeGroup = Clash.queryGroup("GLOBAL", ProxySort.Default)
+                                    if (runtimeGroup.type == "Unknown") throw IllegalStateException("当前运行配置没有 GLOBAL 节点组")
+                                    val runtimeNodes = runtimeGroup.proxies.associateBy { proxy -> proxy.name }
                                     val now = System.currentTimeMillis()
                                     val oldOverrides = dao.queryOverrides(it.profile.uuid).associateBy { value -> value.nodeKey }
                                     profileNodes.forEach { node ->
@@ -85,8 +85,12 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                         )
                                     }
                                 }
-                                design.fetch()
-                                design.showToast("订阅节点测速完成。", ToastDuration.Long)
+                                    }
+                                    design.fetch()
+                                    design.showToast("订阅节点测速完成。", ToastDuration.Long)
+                                } catch (error: Exception) {
+                                    design.showToast("测速失败：${error.message ?: "未知错误"}", ToastDuration.Long)
+                                }
                             }
                         }
                         is ProfilesDesign.Request.SetDelayThresholds -> withContext(Dispatchers.IO) {
