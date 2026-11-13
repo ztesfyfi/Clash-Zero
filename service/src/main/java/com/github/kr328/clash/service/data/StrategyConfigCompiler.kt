@@ -31,32 +31,37 @@ object StrategyConfigCompiler {
         val graphError = StrategyGraphValidator.validate(strategyIds, nodeGroupIds, references)
         require(graphError == null) { graphError ?: "代理策略引用无效" }
 
-        val usedNodeIds = strategyMembers.values.flatten()
-            .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
-            .map { it.memberId }.toSet()
-        val usedStrategyIds = strategies.filter { group ->
-            strategyMembers[group.id].orEmpty().isNotEmpty()
-        }.map { it.id }.toMutableSet()
-        var removed: Boolean
-        do {
-            removed = usedStrategyIds.removeAll { id ->
-                strategyMembers[id].orEmpty().any {
-                    it.memberType == StrategyGroupMember.TYPE_STRATEGY_GROUP && it.memberId !in usedStrategyIds
-                }
-            }
-        } while (removed)
-
-        val nodeNames = nodeGroups.filter { it.id in usedNodeIds && it.mode == NodeGroup.MODE_STATIC }
-            .associate { it.id to nodeGroupName(it.id) }
-        val strategyNames = usedStrategyIds.associateWith(::strategyName)
-        val proxyGroups = JSONArray()
-
-        for (group in nodeGroups.filter { it.id in nodeNames.keys }) {
-            val members = database.openNodeGroupDao().queryMembers(group.id)
+        val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC }.associate { group ->
+            group.id to database.openNodeGroupDao().queryMembers(group.id)
                 .filter { it.profileUuid == profileUuid }
                 .map { it.proxyName }
                 .distinct()
-            if (members.isEmpty()) continue
+        }
+        val nodeNames = staticMembers.filterValues { it.isNotEmpty() }
+            .keys.associateWith(::nodeGroupName)
+        val usableStrategies = strategies.filter { group ->
+            val members = strategyMembers[group.id].orEmpty()
+            members.isNotEmpty() && members.all { member ->
+                when (member.memberType) {
+                    StrategyGroupMember.TYPE_NODE_GROUP -> member.memberId in nodeNames
+                    StrategyGroupMember.TYPE_STRATEGY_GROUP -> member.memberId in strategies.map { it.id }
+                    else -> false
+                }
+            }
+        }.map { it.id }.toMutableSet()
+        var removed: Boolean
+        do {
+            removed = usableStrategies.removeAll { id ->
+                strategyMembers[id].orEmpty().any {
+                    it.memberType == StrategyGroupMember.TYPE_STRATEGY_GROUP && it.memberId !in usableStrategies
+                }
+            }
+        } while (removed)
+        val strategyNames = usableStrategies.associateWith(::strategyName)
+        val proxyGroups = JSONArray()
+
+        for (group in nodeGroups.filter { it.id in nodeNames.keys }) {
+            val members = staticMembers[group.id].orEmpty()
             proxyGroups.put(
                 JSONObject()
                     .put("name", nodeNames.getValue(group.id))
