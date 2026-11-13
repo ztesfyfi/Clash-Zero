@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"regexp"
 
 	"github.com/metacubex/mihomo/common/yaml"
 )
@@ -83,6 +84,15 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 		provider := raw.ProxyProvider[providerName]
 		providerPath, _ := provider["path"].(string)
 		if providerPath == "" {
+			if payload, ok := provider["payload"].([]any); ok {
+				for _, item := range payload {
+					if proxy, ok := item.(map[string]any); ok {
+						if err := appendProxy(proxy); err != nil {
+							return nil, err
+						}
+					}
+				}
+			}
 			continue
 		}
 		data, err := os.ReadFile(providerPath)
@@ -96,12 +106,27 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 		override, _ := provider["override"].(map[string]any)
 		prefix, _ := override["additional-prefix"].(string)
 		suffix, _ := override["additional-suffix"].(string)
+		nameRules, _ := override["proxy-name"].([]any)
 		for _, proxy := range file.Proxies {
-			if prefix != "" || suffix != "" {
-				proxy = cloneProxy(proxy)
-				name, _ := proxy["name"].(string)
-				proxy["name"] = prefix + name + suffix
+			proxy = cloneProxy(proxy)
+			name, _ := proxy["name"].(string)
+			for _, rawRule := range nameRules {
+				rule, ok := rawRule.(map[string]any)
+				if !ok {
+					continue
+				}
+				pattern, _ := rule["pattern"].(string)
+				target, _ := rule["target"].(string)
+				if pattern == "" {
+					continue
+				}
+				expression, err := regexp.Compile(pattern)
+				if err != nil {
+					return nil, fmt.Errorf("provider %q proxy-name pattern: %w", providerName, err)
+				}
+				name = expression.ReplaceAllString(name, target)
 			}
+			proxy["name"] = prefix + name + suffix
 			if err := appendProxy(proxy); err != nil {
 				return nil, err
 			}
