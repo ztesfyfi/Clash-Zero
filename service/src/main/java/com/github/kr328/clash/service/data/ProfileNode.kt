@@ -28,4 +28,14 @@ data class ProfileNodeOverride(
     @ColumnInfo(name = "originalName") val originalName: String,
     @ColumnInfo(name = "customName") val customName: String? = null,
     @ColumnInfo(name = "groupId") val groupId: String? = null,
+    @ColumnInfo(name = "delayMs") val delayMs: Int? = null,
+    @ColumnInfo(name = "testedAt") val testedAt: Long? = null,
+    @ColumnInfo(name = "testError") val testError: String? = null,
+)
+
+@Entity(tableName = "profile_node_settings")
+data class ProfileNodeSettings(
+    @PrimaryKey @ColumnInfo(name = "id") val id: Int = 1,
+    @ColumnInfo(name = "goodThresholdMs") val goodThresholdMs: Int? = null,
+    @ColumnInfo(name = "slowThresholdMs") val slowThresholdMs: Int? = null,
 )
