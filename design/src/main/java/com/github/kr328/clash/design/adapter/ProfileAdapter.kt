@@ -79,7 +79,7 @@ class ProfileAdapter(
         val profileNodes = nodes[profile.uuid].orEmpty()
         binding.nodeSummary.visibility = if (stage == 0) View.GONE else View.VISIBLE
         binding.nodeList.visibility = if (stage == 2) View.VISIBLE else View.GONE
-        binding.nodeTest.visibility = if (stage == 1) View.VISIBLE else View.GONE
+        binding.nodeTest.visibility = if (stage > 0) View.VISIBLE else View.GONE
         val good = profileNodes.count { it.delayState == "GOOD" }
         val slow = profileNodes.count { it.delayState == "SLOW" }
         val error = profileNodes.count { it.delayState == "ERROR" }
