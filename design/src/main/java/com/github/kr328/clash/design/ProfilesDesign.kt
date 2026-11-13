@@ -268,7 +268,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
 
     fun showNodeGroupManager() {
         val groups = nodeGroups
-        val labels = groups.map { if (it.enabled) "✓ ${it.name}" else "○ ${it.name}" }.toTypedArray()
+        val labels = groups.map { "${if (it.enabled) "✓" else "○"} ${it.name}${if (it.isPreset) "（预设）" else ""}" }.toTypedArray()
         MaterialAlertDialogBuilder(context)
             .setTitle("节点分组管理")
             .setItems(labels) { _, which ->
@@ -276,8 +276,18 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                 MaterialAlertDialogBuilder(context)
                     .setTitle(group.name)
                     .setItems(arrayOf(if (group.enabled) "停用分组" else "启用分组", "删除分组")) { _, action ->
-                        if (action == 0) requests.trySend(Request.EnableNodeGroup(group.id, !group.enabled))
-                        else requests.trySend(Request.DeleteNodeGroup(group.id))
+                        if (action == 0) {
+                            requests.trySend(Request.EnableNodeGroup(group.id, !group.enabled))
+                        } else {
+                            MaterialAlertDialogBuilder(context)
+                                .setTitle("删除分组")
+                                .setMessage("删除“${group.name}”后，属于该分组的节点将变为未分组。")
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.delete) { _, _ ->
+                                    requests.trySend(Request.DeleteNodeGroup(group.id))
+                                }
+                                .show()
+                        }
                     }
                     .show()
             }
