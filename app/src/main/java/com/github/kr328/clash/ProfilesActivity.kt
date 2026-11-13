@@ -228,6 +228,10 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                 profile.uuid to rawNodes.map { node ->
                     val override = overrides[node.key]
                     val group = override?.groupId?.let(groupById::get)
+                    val delayMs = override?.delayMs
+                    val testedAt = override?.testedAt
+                    val goodThreshold = settings.goodThresholdMs
+                    val slowThreshold = settings.slowThresholdMs
                     ProfileNodeItem(
                         key = node.key,
                         originalName = node.name,
@@ -236,16 +240,16 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         groupId = group?.id,
                         groupName = group?.takeIf { it.enabled }?.name,
                         delayText = when {
-                            override?.delayMs != null -> "${override.delayMs} ms"
-                            override?.testedAt != null -> override.testError ?: "测速失败"
+                            delayMs != null -> "$delayMs ms"
+                            testedAt != null -> override?.testError ?: "测速失败"
                             else -> "未测试"
                         },
                         delayState = when {
-                            override?.delayMs == null && override?.testedAt == null -> "UNTESTED"
-                            override?.delayMs == null -> "ERROR"
-                            settings.goodThresholdMs != null && override.delayMs <= settings.goodThresholdMs -> "GOOD"
-                            settings.slowThresholdMs != null && override.delayMs <= settings.slowThresholdMs -> "SLOW"
-                            settings.goodThresholdMs != null && settings.slowThresholdMs != null -> "ERROR"
+                            delayMs == null && testedAt == null -> "UNTESTED"
+                            delayMs == null -> "ERROR"
+                            goodThreshold != null && delayMs <= goodThreshold -> "GOOD"
+                            slowThreshold != null && delayMs <= slowThreshold -> "SLOW"
+                            goodThreshold != null && slowThreshold != null -> "ERROR"
                             else -> "TESTED"
                         },
                     )
