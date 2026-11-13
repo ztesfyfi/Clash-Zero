@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
+	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/constant/provider"
 	"github.com/metacubex/mihomo/log"
 	mihomoTunnel "github.com/metacubex/mihomo/tunnel"
@@ -53,6 +54,31 @@ func HealthCheckAll() {
 
 func TestProxy(name, url string, timeout time.Duration) (int, error) {
 	proxy := mihomoTunnel.Proxies()[name]
+	if proxy == nil {
+		// Provider nodes are held by proxy providers rather than the top-level
+		// proxy map. Search the active profile's groups so provider-backed nodes
+		// can be tested individually as well.
+		for _, groupProxy := range mihomoTunnel.Proxies() {
+			group, ok := groupProxy.Adapter().(outboundgroup.ProxyGroup)
+			if !ok {
+				continue
+			}
+			for _, proxyProvider := range group.Providers() {
+				for _, candidate := range proxyProvider.Proxies() {
+					if candidate.Name() == name {
+						proxy = candidate
+						break
+					}
+				}
+				if proxy != nil {
+					break
+				}
+			}
+			if proxy != nil {
+				break
+			}
+		}
+	}
 	if proxy == nil {
 		return 0, fmt.Errorf("proxy %q is not present in the active profile", name)
 	}
