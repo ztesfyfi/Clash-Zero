@@ -53,9 +53,9 @@ func load(completable unsafe.Pointer, path C.c_string) {
 func queryProfileProxies(path C.c_string) *C.char {
 	proxies, err := config.QueryProfileProxies(C.GoString(path))
 	if err != nil {
-		return marshalJson(map[string]any{"error": err.Error()})
+		return marshalJson(map[string]any{"error": err.Error(), "nodes": []config.ProfileProxy{}})
 	}
-	return marshalJson(proxies)
+	return marshalJson(map[string]any{"nodes": proxies})
 }
 
 //export readOverride
