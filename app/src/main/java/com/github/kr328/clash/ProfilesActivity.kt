@@ -428,7 +428,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         ipCheckedAtText = override?.ipCheckedAt?.let {
                             android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString()
                         } ?: "从未查询",
-                        groupNamesText = (nodeGroupNames["${profile.uuid}:${node.key}"].orEmpty() + managedGroups.filter { it.mode == NodeGroup.MODE_NAME && it.nameTag == profile.uuid.toString() }.map { it.name }).distinct().joinToString("、").ifBlank { "未加入节点组" },
+                        groupNamesText = (nodeGroupNames["${profile.uuid}:${node.key}"].orEmpty() + managedGroups.filter { group -> group.mode == NodeGroup.MODE_NAME && group.nameTag == profile.uuid.toString() && (group.nameKeyword.isNullOrBlank() || node.name.contains(group.nameKeyword, ignoreCase = true)) }.map { it.name }).distinct().joinToString("、").ifBlank { "未加入节点组" },
                     )
                 }
             }
