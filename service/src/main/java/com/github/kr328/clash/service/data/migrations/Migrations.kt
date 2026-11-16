@@ -229,6 +229,17 @@ private val MIGRATION_8_9 = object : Migration(8, 9) {
     }
 }
 
+private val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN exitIp TEXT")
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN exitCountry TEXT")
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN exitRegion TEXT")
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN exitCity TEXT")
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN ipCheckedAt INTEGER")
+        database.execSQL("ALTER TABLE profile_node_overrides ADD COLUMN ipCheckError TEXT")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -238,6 +249,7 @@ val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_6_7,
     MIGRATION_7_8,
     MIGRATION_8_9,
+    MIGRATION_9_10,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
