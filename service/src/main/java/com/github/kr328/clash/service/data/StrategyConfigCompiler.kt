@@ -24,7 +24,8 @@ object StrategyConfigCompiler {
         val strategies = database.openStrategyGroupDao().queryAll().filter { it.enabled }
         val policies = database.openRoutingPolicyDao().queryAll().filter { it.enabled }
         val proxyServiceDao = database.openProxyServiceDao()
-        val proxyServices = proxyServiceDao.queryAll().filter { it.enabled }
+        val allProxyServices = proxyServiceDao.queryAll()
+        val proxyServices = allProxyServices.filter { it.enabled }
         val serviceNodeMembers = proxyServices.associate { service ->
             service.id to proxyServiceDao.queryNodeGroups(service.id)
         }
@@ -219,10 +220,11 @@ object StrategyConfigCompiler {
         val targetSets = database.openTargetSetDao().queryAll()
         val targetProviders = JSONObject()
         val targetRules = JSONArray()
-        val outboundByTargetSet = serviceTargetBindings.associate { binding ->
+        val enabledTargetSetIds = targetSets.filter { it.enabled }.map { it.id }.toSet()
+        val outboundByTargetSet = serviceTargetBindings.filter { it.targetSetId in enabledTargetSetIds }.associate { binding ->
             binding.targetSetId to (serviceNames[binding.serviceId] ?: error("目标集合绑定了不存在或已停用的代理服务"))
         }
-        val validationError = ProxyServiceValidator.validate(proxyServices, nodeGroups, targetSets, serviceNodeMembers, serviceTargetBindings)
+        val validationError = ProxyServiceValidator.validate(allProxyServices, nodeGroups, targetSets, serviceNodeMembers, serviceTargetBindings)
         require(validationError == null) { validationError ?: "代理服务配置无效" }
         require(targetSetOutboundBindings.isEmpty() || targetSetOutboundBindings == outboundByTargetSet) { "目标集合出口绑定由代理服务统一管理" }
         if (targetSets.any { it.enabled }) {
