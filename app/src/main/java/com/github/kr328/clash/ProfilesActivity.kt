@@ -368,6 +368,15 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         }
         val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
         val groupById = groups.associateBy { it.id }
+        val managedDao = Database.database.openNodeGroupDao()
+        val managedGroups = withContext(Dispatchers.IO) { managedDao.queryAll() }
+        val managedMembers = withContext(Dispatchers.IO) {
+            managedGroups.associate { group -> group.id to managedDao.queryMembers(group.id) }
+        }
+        val nodeGroupNames = managedMembers.flatMap { (groupId, members) ->
+            val groupName = managedGroups.firstOrNull { it.id == groupId }?.name ?: return@flatMap emptyList()
+            members.map { member -> "${member.profileUuid}:${member.proxyKey}" to groupName }
+        }.groupBy({ it.first }, { it.second })
         val nodeErrors = mutableMapOf<UUID, String>()
         val nodeMap = withContext(Dispatchers.IO) {
             profiles.filter { it.imported }.associate { profile ->
@@ -408,14 +417,10 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             else -> "TESTED"
                         },
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
+                        groupNamesText = nodeGroupNames["${profile.uuid}:${node.key}"]?.distinct()?.joinToString("、")?.ifBlank { null } ?: "未加入节点组",
                     )
                 }
             }
-        }
-        val managedDao = Database.database.openNodeGroupDao()
-        val managedGroups = withContext(Dispatchers.IO) { managedDao.queryAll() }
-        val managedMembers = withContext(Dispatchers.IO) {
-            managedGroups.associate { group -> group.id to managedDao.queryMembers(group.id) }
         }
         patchProfiles(
             profiles,
