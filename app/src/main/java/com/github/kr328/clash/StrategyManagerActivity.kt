@@ -23,6 +23,9 @@ import com.github.kr328.clash.service.data.RoutingPolicy
 import com.github.kr328.clash.service.data.StrategyConfigurationRepository
 import com.github.kr328.clash.service.data.StrategyGroup
 import com.github.kr328.clash.service.data.StrategyGroupMember
+import com.github.kr328.clash.service.data.TargetCondition
+import com.github.kr328.clash.service.data.TargetSet
+import com.github.kr328.clash.service.data.TargetSetRepository
 import com.github.kr328.clash.service.util.sendOverrideChanged
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
@@ -81,7 +84,7 @@ class StrategyManagerActivity : AppCompatActivity() {
             text = when (section) {
                 SECTION_NODE_GROUPS -> "统一管理静态与动态出站节点组。"
                 SECTION_STRATEGY_GROUPS -> "管理代理策略类型、成员组合及出口选择方式。"
-                else -> "点击策略项可修改匹配条件和目标策略组。"
+                else -> "目标集合只定义流量匹配条件，不在这里选择代理出口。"
             }
             textSize = 13f
             setPadding(dp(4), dp(4), dp(4), dp(14))
@@ -99,7 +102,7 @@ class StrategyManagerActivity : AppCompatActivity() {
         when (section) {
             SECTION_NODE_GROUPS -> showNodeGroupEditor(null)
             SECTION_STRATEGY_GROUPS -> showStrategyGroupEditor(null)
-            else -> createPolicy()
+            else -> showTargetSetEditor(null)
         }
     }
 
@@ -132,18 +135,14 @@ class StrategyManagerActivity : AppCompatActivity() {
                         }
                     }
                     else -> {
-                        val policies = database.openRoutingPolicyDao().queryAll()
-                        if (policies.isEmpty()) emptyHint("还没有策略。")
-                        policies.forEach { policy ->
-                            val conditions = database.openRoutingPolicyDao().queryConditions(policy.id)
-                            val target = when (policy.targetType) {
-                                RoutingPolicy.TARGET_DIRECT -> "DIRECT"
-                                RoutingPolicy.TARGET_REJECT -> "REJECT"
-                                else -> database.openStrategyGroupDao().queryById(policy.targetId.orEmpty())?.name ?: "目标组缺失"
-                            }
+                        val targetSets = database.openTargetSetDao().queryAll()
+                        if (targetSets.isEmpty()) emptyHint("还没有目标集合，点击右上角新建。")
+                        targetSets.forEach { targetSet ->
+                            val conditions = database.openTargetSetDao().queryConditions(targetSet.id)
                             val matcherSummary = conditions.joinToString("、") { "${it.matcherType}: ${it.matcherValue}" }
-                            addRow(policy.name, "出口：$target · ${matcherSummary.ifBlank { "未设置条件" }} · 优先级：${policy.priority}", policy.enabled) {
-                                editPolicy(policy)
+                            val mode = if (targetSet.matchMode == TargetSet.MATCH_ALL) "全部匹配（AND）" else "任一匹配（OR）"
+                            addRow(targetSet.name, "$mode · ${conditions.size} 条规则 · ${matcherSummary.ifBlank { "尚未配置规则" }}", targetSet.enabled) {
+                                showTargetSetActions(targetSet)
                             }
                         }
                     }
@@ -152,6 +151,158 @@ class StrategyManagerActivity : AppCompatActivity() {
                 toast("读取失败：${error.message}")
             }
         }
+    }
+
+    private fun showTargetSetActions(targetSet: TargetSet) {
+        AlertDialog.Builder(this).setTitle(targetSet.name)
+            .setItems(arrayOf("编辑规则", if (targetSet.enabled) "停用" else "启用", "删除")) { _, which ->
+                when (which) {
+                    0 -> showTargetSetEditor(targetSet)
+                    1 -> scope.launch {
+                        database.openTargetSetDao().setEnabled(targetSet.id, !targetSet.enabled)
+                        refresh(apply = true)
+                    }
+                    2 -> AlertDialog.Builder(this).setMessage("确定删除目标集合“${targetSet.name}”？")
+                        .setNegativeButton("取消", null)
+                        .setPositiveButton("删除") { _, _ ->
+                            scope.launch {
+                                database.openTargetSetDao().delete(targetSet.id)
+                                refresh(apply = true)
+                            }
+                        }.show()
+                }
+            }.setNegativeButton("取消", null).show()
+    }
+
+    private fun showTargetSetEditor(existing: TargetSet?) {
+        scope.launch {
+            val dao = database.openTargetSetDao()
+            val conditions = dao.queryConditions(existing?.id.orEmpty()).toMutableList()
+            val name = edit("目标集合名称").apply { setText(existing?.name.orEmpty()) }
+            val matchMode = spinner(listOf("任一规则匹配（OR）", "全部规则匹配（AND）")).apply {
+                setSelection(if (existing?.matchMode == TargetSet.MATCH_ALL) 1 else 0)
+            }
+            val conditionList = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+            }
+            fun renderConditions() {
+                conditionList.removeAllViews()
+                if (conditions.isEmpty()) {
+                    conditionList.addView(TextView(this@StrategyManagerActivity).apply {
+                        text = "尚未添加规则"
+                        textSize = 13f
+                        alpha = 0.7f
+                    })
+                }
+                conditions.forEachIndexed { index, condition ->
+                    val row = LinearLayout(this@StrategyManagerActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                    row.addView(TextView(this@StrategyManagerActivity).apply {
+                        text = "${condition.matcherType} · ${condition.matcherValue}"
+                        textSize = 13f
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(Button(this@StrategyManagerActivity).apply {
+                        text = "移除"
+                        setOnClickListener {
+                            conditions.removeAt(index)
+                            renderConditions()
+                        }
+                    })
+                    conditionList.addView(row)
+                }
+            }
+            val addCondition = Button(this@StrategyManagerActivity).apply {
+                text = "＋ 添加匹配规则"
+                setOnClickListener {
+                    showTargetConditionEditor(existing?.id ?: "pending", matchMode.selectedItemPosition, conditions) {
+                        renderConditions()
+                    }
+                }
+            }
+            val form = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(24), dp(8), dp(24), 0)
+                addView(label("集合名称")); addView(name)
+                addView(label("规则关系")); addView(matchMode)
+                addView(label("匹配规则")); addView(conditionList)
+                addView(addCondition)
+            }
+            renderConditions()
+            val dialog = AlertDialog.Builder(this@StrategyManagerActivity)
+                .setTitle(if (existing == null) "新建目标集合" else "编辑目标集合")
+                .setView(form)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", null)
+                .create()
+            dialog.setOnShowListener {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    val setName = name.text.toString().trim()
+                    if (setName.isBlank()) {
+                        toast("请输入目标集合名称")
+                        return@setOnClickListener
+                    }
+                    val id = existing?.id ?: java.util.UUID.randomUUID().toString()
+                    val match = if (matchMode.selectedItemPosition == 1) TargetSet.MATCH_ALL else TargetSet.MATCH_ANY
+                    val normalized = conditions.map {
+                        it.copy(
+                            targetSetId = id,
+                            groupMode = if (match == TargetSet.MATCH_ALL) TargetCondition.GROUP_ALL else TargetCondition.GROUP_ANY
+                        )
+                    }
+                    val saved = existing?.copy(
+                        name = setName,
+                        matchMode = match,
+                        updatedAt = System.currentTimeMillis()
+                    ) ?: TargetSet(id = id, name = setName, matchMode = match)
+                    scope.launch {
+                        runCatching { TargetSetRepository(database).save(saved, normalized) }
+                            .onSuccess {
+                                dialog.dismiss()
+                                refresh(apply = true)
+                            }
+                            .onFailure { toast("保存失败：${it.message}") }
+                    }
+                }
+            }
+            dialog.show()
+        }
+    }
+
+    private fun showTargetConditionEditor(
+        targetSetId: String,
+        matchModeIndex: Int,
+        conditions: MutableList<TargetCondition>,
+        onChanged: () -> Unit,
+    ) {
+        val types = listOf(
+            "域名 DOMAIN", "域名后缀 DOMAIN_SUFFIX", "域名关键词 DOMAIN_KEYWORD",
+            "IP 地址 IP", "IP 网段 IP_CIDR", "GeoIP GEOIP", "GeoSite GEOSITE"
+        )
+        val type = spinner(types)
+        val value = edit("匹配值（域名、IP、CIDR、GeoIP 国家代码或 GeoSite 标签）")
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(label("匹配类型")); addView(type)
+            addView(label("匹配值")); addView(value)
+        }
+        AlertDialog.Builder(this).setTitle("添加匹配规则").setView(form)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("添加") { _, _ ->
+                val raw = value.text.toString().trim()
+                if (raw.isBlank()) return@setPositiveButton toast("请输入匹配值")
+                val matcher = types[type.selectedItemPosition].substringAfterLast(' ')
+                val groupMode = if (matchModeIndex == 1) TargetCondition.GROUP_ALL else TargetCondition.GROUP_ANY
+                conditions += TargetCondition(
+                    targetSetId = targetSetId,
+                    groupMode = groupMode,
+                    matcherType = matcher,
+                    matcherValue = raw,
+                )
+                onChanged()
+            }.show()
     }
 
     private fun showNodeGroupActions(group: NodeGroup) {
