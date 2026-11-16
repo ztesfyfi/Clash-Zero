@@ -16,6 +16,9 @@ import com.github.kr328.clash.service.data.Database
 import com.github.kr328.clash.service.data.ProfileNodeGroup
 import com.github.kr328.clash.service.data.ProfileNodeOverride
 import com.github.kr328.clash.service.data.ProfileNodeSettings
+import com.github.kr328.clash.service.data.NodeGroup
+import com.github.kr328.clash.service.data.NodeGroupMember
+import com.github.kr328.clash.service.data.NodeGroupMatcher
 import com.github.kr328.clash.service.util.importedDir
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
@@ -234,6 +237,49 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
+                        is ProfilesDesign.Request.CreateManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val name = it.name.trim()
+                            require(name.isNotBlank()) { "节点组名称不能为空" }
+                            require(dao.queryAll().none { group -> group.name.equals(name, true) }) { "节点组名称已存在" }
+                            val tag = it.nameTag?.let(NodeGroupMatcher::subscriptionTag)
+                            if (it.mode == NodeGroup.MODE_NAME) require(!tag.isNullOrBlank()) { "动态组必须关联订阅名称" }
+                            dao.upsert(NodeGroup(name = name, mode = it.mode, nameTag = tag))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.RenameManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            val name = it.name.trim()
+                            require(name.isNotBlank()) { "节点组名称不能为空" }
+                            require(dao.queryAll().none { group -> group.id != it.id && group.name.equals(name, true) }) { "节点组名称已存在" }
+                            dao.upsert(old.copy(name = name, updatedAt = System.currentTimeMillis()))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.EnableManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            dao.upsert(old.copy(enabled = it.enabled, updatedAt = System.currentTimeMillis()))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.DeleteManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            Database.database.openNodeGroupDao().delete(it.id)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.ReplaceManagedNodeGroupMembers -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.id) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以手动编辑成员" }
+                            dao.clearMembers(it.id)
+                            it.members.distinctBy { member -> "${member.profileUuid}:${member.proxyKey}" }
+                                .forEach { member -> dao.addMember(member.copy(groupId = it.id)) }
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
                         ProfilesDesign.Request.Refresh -> design.fetch()
                         ProfilesDesign.Request.UpdateAll ->
                             withProfile {
@@ -355,12 +401,19 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                 }
             }
         }
+        val managedDao = Database.database.openNodeGroupDao()
+        val managedGroups = withContext(Dispatchers.IO) { managedDao.queryAll() }
+        val managedMembers = withContext(Dispatchers.IO) {
+            managedGroups.associate { group -> group.id to managedDao.queryMembers(group.id) }
+        }
         patchProfiles(
             profiles,
             nodeMap,
             groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) },
             nodeErrors,
-            ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs)
+            ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs),
+            managedGroups,
+            managedMembers
         )
     }
 
