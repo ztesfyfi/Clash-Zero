@@ -417,7 +417,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             else -> "TESTED"
                         },
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
-                        groupNamesText = nodeGroupNames["${profile.uuid}:${node.key}"]?.distinct()?.joinToString("、")?.ifBlank { null } ?: "未加入节点组",
+                        groupNamesText = nodeGroupNames["${profile.uuid}:${node.key}"]?.distinct()?.joinToString("、")?.takeIf { it.isNotBlank() } ?: "未加入节点组",
                     )
                 }
             }
