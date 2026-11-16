@@ -151,20 +151,36 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
-                        is ProfilesDesign.Request.RenameNode -> withContext(Dispatchers.IO) {
-                            val dao = Database.database.openProfileNodeDao()
-                            val old = dao.queryOverrides(it.profile.uuid).firstOrNull { value -> value.nodeKey == it.node.key }
-                            dao.upsertOverride(
-                                ProfileNodeOverride(
-                                    it.profile.uuid, it.node.key, it.node.originalName,
-                                    it.name.takeIf { name -> name.isNotBlank() && name != it.node.originalName },
-                                    old?.groupId,
-                                    old?.delayMs,
-                                    old?.testedAt,
-                                    old?.testError
+                        is ProfilesDesign.Request.RenameNode -> {
+                            val normalizedName = it.name.trim()
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    val dao = Database.database.openProfileNodeDao()
+                                    val old = dao.queryOverrides(it.profile.uuid)
+                                        .firstOrNull { value -> value.nodeKey == it.node.key }
+                                    dao.upsertOverride(
+                                        ProfileNodeOverride(
+                                            it.profile.uuid,
+                                            it.node.key,
+                                            it.node.originalName,
+                                            normalizedName.takeIf { name ->
+                                                name.isNotBlank() && name != it.node.originalName
+                                            },
+                                            old?.groupId,
+                                            old?.delayMs,
+                                            old?.testedAt,
+                                            old?.testError
+                                        )
+                                    )
+                                }
+                                design.fetch()
+                                design.showToast(
+                                    if (normalizedName == it.node.originalName) "已恢复节点原始名称。" else "节点名称已保存。",
+                                    ToastDuration.Long
                                 )
-                            )
-                            design.fetch()
+                            } catch (error: Exception) {
+                                design.showToast("保存节点名称失败：${error.message ?: "未知错误"}", ToastDuration.Long)
+                            }
                         }
                         is ProfilesDesign.Request.SetNodeGroup -> withContext(Dispatchers.IO) {
                             val dao = Database.database.openProfileNodeDao()
