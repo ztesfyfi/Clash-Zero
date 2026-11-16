@@ -246,6 +246,42 @@ private val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+private val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS target_sets (
+                id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                matchMode TEXT NOT NULL,
+                iconMode TEXT NOT NULL,
+                iconType TEXT,
+                iconValue TEXT,
+                sortOrder INTEGER NOT NULL,
+                enabled INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_target_sets_sortOrder ON target_sets(sortOrder)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_target_sets_enabled ON target_sets(enabled)")
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS target_conditions (
+                id TEXT NOT NULL,
+                targetSetId TEXT NOT NULL,
+                conditionGroup TEXT NOT NULL,
+                groupMode TEXT NOT NULL,
+                matcherType TEXT NOT NULL,
+                matcherValue TEXT NOT NULL,
+                negated INTEGER NOT NULL,
+                PRIMARY KEY(id),
+                FOREIGN KEY(targetSetId) REFERENCES target_sets(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_target_conditions_targetSetId_conditionGroup ON target_conditions(targetSetId, conditionGroup)")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -257,6 +293,7 @@ val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_8_9,
     MIGRATION_9_10,
     MIGRATION_10_11,
+    MIGRATION_11_12,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
