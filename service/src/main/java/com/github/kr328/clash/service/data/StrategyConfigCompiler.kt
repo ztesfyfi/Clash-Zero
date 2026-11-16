@@ -41,13 +41,26 @@ object StrategyConfigCompiler {
         val verifiedOverrides = database.openProfileNodeDao().queryOverrides(profileUuid)
             .filter {
                 !it.exitIp.isNullOrBlank() && it.ipCheckedAt != null &&
-                    it.ipCheckError.isNullOrBlank() && !it.exitCountry.isNullOrBlank()
+                    it.ipCheckError.isNullOrBlank() && it.exitCountry?.matches(Regex("^[A-Za-z]{2}$")) == true
             }
         val regionMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_NAME_REGION }.associate { group ->
             group.id to verifiedOverrides
                 .filter { it.exitCountry.equals(group.regionCode, ignoreCase = true) }
                 .map { it.originalName }
                 .distinct()
+        }
+        val referencedNodeGroupIds = strategyMembers.values.flatten()
+            .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+            .map { it.memberId }
+            .toSet()
+        nodeGroups.filter {
+            it.id in referencedNodeGroupIds &&
+                it.mode == NodeGroup.MODE_NAME_REGION &&
+                it.nameTag == profileUuid.toString()
+        }.forEach { group ->
+            require(regionMembers[group.id].orEmpty().isNotEmpty()) {
+                "地区动态组“${group.name}”没有可用节点：请先完成真实出口 IP 查询，且国家代码必须为 ISO 两位代码"
+            }
         }
         val nodeNames = nodeGroups.filter { group ->
             group.id in strategyMembers.values.flatten()
