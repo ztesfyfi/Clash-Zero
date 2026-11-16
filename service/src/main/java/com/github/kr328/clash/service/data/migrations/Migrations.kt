@@ -282,6 +282,40 @@ private val MIGRATION_11_12 = object : Migration(11, 12) {
     }
 }
 
+
+private val MIGRATION_12_13 = object : Migration(12, 13) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS proxy_services (
+                id TEXT NOT NULL, name TEXT NOT NULL, mode TEXT NOT NULL,
+                sortOrder INTEGER NOT NULL, enabled INTEGER NOT NULL,
+                createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL,
+                PRIMARY KEY(id)
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_proxy_services_sortOrder ON proxy_services(sortOrder)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_proxy_services_enabled ON proxy_services(enabled)")
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS proxy_service_node_groups (
+                serviceId TEXT NOT NULL, nodeGroupId TEXT NOT NULL, position INTEGER NOT NULL,
+                PRIMARY KEY(serviceId, nodeGroupId),
+                FOREIGN KEY(serviceId) REFERENCES proxy_services(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(nodeGroupId) REFERENCES node_groups(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_proxy_service_node_groups_nodeGroupId ON proxy_service_node_groups(nodeGroupId)")
+        database.execSQL("""
+            CREATE TABLE IF NOT EXISTS proxy_service_target_sets (
+                targetSetId TEXT NOT NULL, serviceId TEXT NOT NULL,
+                PRIMARY KEY(targetSetId),
+                FOREIGN KEY(targetSetId) REFERENCES target_sets(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                FOREIGN KEY(serviceId) REFERENCES proxy_services(id) ON UPDATE NO ACTION ON DELETE CASCADE
+            )
+        """.trimIndent())
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_proxy_service_target_sets_serviceId ON proxy_service_target_sets(serviceId)")
+    }
+}
+
 val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_1_2,
     MIGRATION_2_3,
@@ -294,6 +328,7 @@ val MIGRATIONS: Array<Migration> = arrayOf(
     MIGRATION_9_10,
     MIGRATION_10_11,
     MIGRATION_11_12,
+    MIGRATION_12_13,
 )
 
 val LEGACY_MIGRATION = ::migrationFromLegacy
