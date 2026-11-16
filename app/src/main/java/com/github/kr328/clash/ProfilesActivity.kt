@@ -280,6 +280,17 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
+                        is ProfilesDesign.Request.SetManagedNodeMembership -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.groupId) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "动态节点组不能手动添加成员" }
+                            if (it.selected) {
+                                dao.addMember(NodeGroupMember(it.groupId, it.profileUuid, it.proxyKey, it.proxyName))
+                            } else {
+                                dao.removeMember(it.groupId, it.profileUuid, it.proxyKey)
+                            }
+                            design.fetch()
+                        }
                         ProfilesDesign.Request.Refresh -> design.fetch()
                         ProfilesDesign.Request.UpdateAll ->
                             withProfile {
