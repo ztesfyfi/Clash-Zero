@@ -21,6 +21,7 @@ class MainDesign(context: Context) : Design<MainDesign.Request>(context) {
         OpenNodeGroups,
         OpenStrategyGroups,
         OpenRoutingPolicies,
+        OpenProxyServices,
         OpenProviders,
         OpenLogs,
         OpenSettings,
