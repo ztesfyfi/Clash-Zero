@@ -49,7 +49,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class CreateNodeGroup(val name: String) : Request()
         data class DeleteNodeGroup(val id: String) : Request()
         data class EnableNodeGroup(val id: String, val enabled: Boolean) : Request()
-        data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?) : Request()
+        data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?, val nameKeyword: String? = null) : Request()
         data class RenameManagedNodeGroup(val id: String, val name: String) : Request()
         data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class DeleteManagedNodeGroup(val id: String) : Request()
@@ -314,10 +314,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     fun showNodeGroupManager() {
         val groups = managedNodeGroups
         val labels = groups.map { group ->
-            val mode = if (group.mode == NodeGroup.MODE_STATIC) "静态组" else "订阅动态组"
+            val mode = if (group.mode == NodeGroup.MODE_STATIC) "静态组" else if (group.nameKeyword.isNullOrBlank()) "订阅动态组" else "关键字动态组"
             val count = managedNodeMembers[group.id].orEmpty().size
             val source = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }?.name ?: "关联订阅不可用"
-            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else source}"
+            val filter = group.nameKeyword?.takeIf { it.isNotBlank() }?.let { " · 包含：$it" }.orEmpty()
+            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else source + filter}"
         }.toTypedArray()
         MaterialAlertDialogBuilder(context)
             .setTitle("节点管理 · 节点组")
@@ -366,7 +367,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                     launch { showToast("节点组名称不能为空。", ToastDuration.Long) }
                 } else {
                     MaterialAlertDialogBuilder(context).setTitle("选择节点组类型")
-                        .setItems(arrayOf("静态组（手动选择节点）", "动态组（关联整个订阅）")) { _, mode ->
+                        .setItems(arrayOf(
+                            "静态组（手动选择节点）",
+                            "动态组（关联整个订阅）",
+                            "动态组（按节点名称关键字筛选）"
+                        )) { _, mode ->
                             if (mode == 0) {
                                 requests.trySend(Request.CreateManagedNodeGroup(name, NodeGroup.MODE_STATIC, null))
                             } else {
@@ -376,9 +381,32 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                                 } else {
                                     MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
                                         .setItems(sources.map { it.name }.toTypedArray()) { _, selected ->
-                                            requests.trySend(Request.CreateManagedNodeGroup(
-                                                name, NodeGroup.MODE_NAME, sources[selected].uuid.toString()
-                                            ))
+                                            val sourceId = sources[selected].uuid.toString()
+                                            if (mode == 1) {
+                                                requests.trySend(Request.CreateManagedNodeGroup(
+                                                    name, NodeGroup.MODE_NAME, sourceId
+                                                ))
+                                            } else {
+                                                val keywordInput = EditText(context).apply {
+                                                    setSingleLine(true)
+                                                    hint = "输入节点名称关键字"
+                                                }
+                                                MaterialAlertDialogBuilder(context)
+                                                    .setTitle("设置节点筛选关键字")
+                                                    .setMessage("只匹配该订阅中原始节点名称包含此关键字的节点。")
+                                                    .setView(keywordInput)
+                                                    .setNegativeButton(R.string.cancel, null)
+                                                    .setPositiveButton(R.string.ok) { _, _ ->
+                                                        val keyword = keywordInput.text.toString().trim()
+                                                        if (keyword.isBlank()) {
+                                                            launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
+                                                        } else {
+                                                            requests.trySend(Request.CreateManagedNodeGroup(
+                                                                name, NodeGroup.MODE_NAME, sourceId, keyword
+                                                            ))
+                                                        }
+                                                    }.show()
+                                            }
                                         }.show()
                                 }
                             }
