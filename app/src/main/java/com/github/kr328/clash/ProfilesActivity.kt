@@ -462,6 +462,8 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
                         exitIpText = override?.exitIp ?: "未查询",
                         exitCountryCode = override?.exitCountry,
+                        exitLookupVerified = override?.exitIp?.isNotBlank() == true &&
+                            override.ipCheckedAt != null && override.ipCheckError.isNullOrBlank(),
                         exitLocationText = listOfNotNull(override?.exitCountry, override?.exitRegion, override?.exitCity)
                             .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "归属地未知" },
                         ipCheckedAtText = override?.ipCheckedAt?.let {
