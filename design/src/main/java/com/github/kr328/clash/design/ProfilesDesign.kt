@@ -54,6 +54,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class DeleteManagedNodeGroup(val id: String) : Request()
         data class ReplaceManagedNodeGroupMembers(val id: String, val members: List<NodeGroupMember>) : Request()
+        data class SetManagedNodeMembership(val groupId: String, val profileUuid: java.util.UUID, val proxyKey: String, val proxyName: String, val selected: Boolean) : Request()
         object Refresh : Request()
         object Create : Request()
         data class Active(val profile: Profile) : Request()
@@ -282,15 +283,32 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     }
 
     private fun showNodeGroupPicker(profile: Profile, node: ProfileNodeItem) {
-        val enabled = nodeGroups.filter { it.enabled }
-        val labels = listOf("不分组") + enabled.map { it.name }
-        MaterialAlertDialogBuilder(context)
-            .setTitle("选择节点分组")
-            .setItems(labels.toTypedArray()) { _, which ->
-                requests.trySend(Request.SetNodeGroup(profile, node, if (which == 0) null else enabled[which - 1].id))
+        val groups = managedNodeGroups.filter { it.enabled && it.mode == NodeGroup.MODE_STATIC }
+        if (groups.isEmpty()) {
+            MaterialAlertDialogBuilder(context).setTitle("节点组")
+                .setMessage("还没有静态节点组。先创建节点组，再把节点加入一个或多个组。")
+                .setPositiveButton("管理节点组") { _, _ -> requests.trySend(Request.ManageGroups) }
+                .setNegativeButton(R.string.close, null).show()
+            return
+        }
+        val checked = BooleanArray(groups.size) { index ->
+            managedNodeMembers[groups[index].id].orEmpty().any {
+                it.profileUuid == profile.uuid && it.proxyKey == node.key
             }
-            .setNeutralButton("分组管理") { _, _ -> requests.trySend(Request.ManageGroups) }
-            .show()
+        }
+        MaterialAlertDialogBuilder(context).setTitle("选择节点所属的组（可多选）")
+            .setMultiChoiceItems(groups.map { it.name }.toTypedArray(), checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton("管理节点组") { _, _ -> requests.trySend(Request.ManageGroups) }
+            .setPositiveButton("保存") { _, _ ->
+                groups.forEachIndexed { index, group ->
+                    requests.trySend(Request.SetManagedNodeMembership(
+                        group.id, profile.uuid, node.key, node.originalName, checked[index]
+                    ))
+                }
+            }.show()
     }
 
     fun showNodeGroupManager() {
