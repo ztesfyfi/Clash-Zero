@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -302,6 +303,7 @@ class StrategyManagerActivity : AppCompatActivity() {
             val value = edit("匹配值（域名、IP、CIDR、国家代码或 GeoSite 标签）")
             val setOptions = ruleSets.map { "${it.name} · ${if (it.kind == RuleSet.KIND_IP) "IP" else "域名"}" }
             val setSelector = spinner(setOptions.ifEmpty { listOf("暂无规则集，请先创建") })
+            val negated = CheckBox(this@StrategyManagerActivity).apply { text = "反向匹配（NOT）" }
             val form = LinearLayout(this@StrategyManagerActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(24), dp(8), dp(24), 0)
@@ -330,6 +332,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     }
                 })
                 addView(label("规则集（仅 IP_SET / DOMAIN_SET 使用）")); addView(setSelector)
+                addView(negated)
             }
             AlertDialog.Builder(this@StrategyManagerActivity).setTitle("添加匹配规则").setView(form)
                 .setNegativeButton("取消", null)
@@ -351,6 +354,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                         groupMode = groupMode,
                         matcherType = matcher,
                         matcherValue = raw,
+                        negated = negated.isChecked,
                     )
                     onChanged()
                 }.show()
@@ -403,10 +407,9 @@ class StrategyManagerActivity : AppCompatActivity() {
         val kind = spinner(listOf("IP 规则集", "域名规则集")).apply {
             setSelection(if (existing?.kind == RuleSet.KIND_DOMAIN) 1 else 0)
         }
-        val sourceType = spinner(listOf("远程 URL", "本地文件", "内置标识")).apply {
+        val sourceType = spinner(listOf("远程 URL", "本地文件")).apply {
             setSelection(when (existing?.sourceType) {
                 RuleSet.SOURCE_FILE -> 1
-                RuleSet.SOURCE_BUILTIN -> 2
                 else -> 0
             })
         }
@@ -439,13 +442,18 @@ class StrategyManagerActivity : AppCompatActivity() {
                 val source = sourceValue.text.toString().trim()
                 val hours = interval.text.toString().toLongOrNull() ?: 24L
                 if (setName.isBlank() || source.isBlank()) return@setPositiveButton toast("名称和来源不能为空")
+                if (sourceType.selectedItemPosition == 0 && !(source.startsWith("https://", true) || source.startsWith("http://", true))) {
+                    return@setPositiveButton toast("远程规则集必须使用 HTTP(S) URL")
+                }
+                if (sourceType.selectedItemPosition == 1 && (!java.io.File(source).isAbsolute || !java.io.File(source).isFile)) {
+                    return@setPositiveButton toast("本地规则集文件不存在，请填写可读取的绝对路径")
+                }
                 if (hours < 1L) return@setPositiveButton toast("更新间隔至少为 1 小时")
                 val saved = existing?.copy(
                     name = setName,
                     kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
                     sourceType = when (sourceType.selectedItemPosition) {
                         1 -> RuleSet.SOURCE_FILE
-                        2 -> RuleSet.SOURCE_BUILTIN
                         else -> RuleSet.SOURCE_URL
                     },
                     sourceValue = source,
@@ -459,11 +467,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                 ) ?: RuleSet(
                     name = setName,
                     kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
-                    sourceType = when (sourceType.selectedItemPosition) {
-                        1 -> RuleSet.SOURCE_FILE
-                        2 -> RuleSet.SOURCE_BUILTIN
-                        else -> RuleSet.SOURCE_URL
-                    },
+                    sourceType = if (sourceType.selectedItemPosition == 1) RuleSet.SOURCE_FILE else RuleSet.SOURCE_URL,
                     sourceValue = source,
                     format = when (format.selectedItemPosition) {
                         1 -> RuleSet.FORMAT_CLASSICAL
