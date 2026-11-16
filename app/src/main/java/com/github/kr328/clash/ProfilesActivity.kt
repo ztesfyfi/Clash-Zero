@@ -261,15 +261,27 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             require(dao.queryAll().none { group -> group.name.equals(name, true) }) { "节点组名称已存在" }
                             val tag = it.nameTag
                             val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
-                            if (it.mode == NodeGroup.MODE_NAME) {
+                            if (it.mode == NodeGroup.MODE_NAME || it.mode == NodeGroup.MODE_NAME_REGION) {
                                 val sourceUuid = runCatching { UUID.fromString(tag) }.getOrNull()
                                     ?: error("动态组必须关联一个有效订阅")
                                 require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
-                                require(it.nameKeyword == null || keyword != null) { "动态组筛选关键字不能为空" }
+                                if (it.mode == NodeGroup.MODE_NAME) {
+                                    require(it.nameKeyword == null || keyword != null) { "动态组筛选关键字不能为空" }
+                                    require(it.regionCode == null) { "普通动态组不能设置地区代码" }
+                                } else {
+                                    require(it.regionCode?.matches(Regex("^[A-Za-z]{2}$")) == true) { "请选择有效的国家/地区代码" }
+                                    require(keyword == null) { "地区动态组不能设置节点名称关键字" }
+                                }
                             } else {
-                                require(keyword == null) { "只有订阅动态组可以设置节点名称关键字" }
+                                require(keyword == null && it.regionCode == null) { "静态组不能设置动态筛选条件" }
                             }
-                            dao.upsert(NodeGroup(name = name, mode = it.mode, nameTag = tag, nameKeyword = keyword))
+                            dao.upsert(NodeGroup(
+                                name = name,
+                                mode = it.mode,
+                                nameTag = tag,
+                                nameKeyword = keyword,
+                                regionCode = it.regionCode?.uppercase()
+                            ))
                             design.fetch()
                             design.showNodeGroupManager()
                         }
@@ -286,15 +298,24 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         is ProfilesDesign.Request.UpdateManagedDynamicNodeGroup -> withContext(Dispatchers.IO) {
                             val dao = Database.database.openNodeGroupDao()
                             val old = dao.queryById(it.id) ?: error("节点组不存在")
-                            require(old.mode == NodeGroup.MODE_NAME) { "只有订阅动态组可以修改动态筛选条件" }
+                            require(old.mode == NodeGroup.MODE_NAME || old.mode == NodeGroup.MODE_NAME_REGION) { "只有动态组可以修改动态筛选条件" }
                             val sourceUuid = runCatching { UUID.fromString(it.nameTag) }.getOrNull()
                                 ?: error("动态组必须关联一个有效订阅")
                             require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
                             val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
-                            require(it.nameKeyword == null || keyword != null) { "筛选关键字不能为空" }
+                            if (it.mode == NodeGroup.MODE_NAME_REGION) {
+                                require(it.regionCode?.matches(Regex("^[A-Za-z]{2}$")) == true) { "请选择有效的国家/地区代码" }
+                                require(keyword == null) { "地区动态组不能设置节点名称关键字" }
+                            } else {
+                                require(it.mode == NodeGroup.MODE_NAME) { "动态组类型无效" }
+                                require(it.regionCode == null) { "普通动态组不能设置地区代码" }
+                                require(it.nameKeyword == null || keyword != null) { "筛选关键字不能为空" }
+                            }
                             dao.upsert(old.copy(
+                                mode = it.mode,
                                 nameTag = sourceUuid.toString(),
                                 nameKeyword = keyword,
+                                regionCode = it.regionCode?.uppercase(),
                                 updatedAt = System.currentTimeMillis()
                             ))
                             design.fetch()
@@ -440,6 +461,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         },
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
                         exitIpText = override?.exitIp ?: "未查询",
+                        exitCountryCode = override?.exitCountry,
                         exitLocationText = listOfNotNull(override?.exitCountry, override?.exitRegion, override?.exitCity)
                             .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "归属地未知" },
                         ipCheckedAtText = override?.ipCheckedAt?.let {
