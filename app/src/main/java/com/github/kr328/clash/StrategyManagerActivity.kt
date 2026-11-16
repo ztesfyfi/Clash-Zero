@@ -20,6 +20,7 @@ import com.github.kr328.clash.service.data.Database
 import com.github.kr328.clash.service.data.NodeGroup
 import com.github.kr328.clash.service.data.PolicyCondition
 import com.github.kr328.clash.service.data.RoutingPolicy
+import com.github.kr328.clash.service.data.RuleSet
 import com.github.kr328.clash.service.data.StrategyConfigurationRepository
 import com.github.kr328.clash.service.data.StrategyGroup
 import com.github.kr328.clash.service.data.StrategyGroupMember
@@ -228,6 +229,10 @@ class StrategyManagerActivity : AppCompatActivity() {
                 addView(label("规则关系")); addView(matchMode)
                 addView(label("匹配规则")); addView(conditionList)
                 addView(addCondition)
+                addView(Button(this@StrategyManagerActivity).apply {
+                    text = "管理 IP / 域名规则集"
+                    setOnClickListener { showRuleSetManager() }
+                })
             }
             renderConditions()
             val dialog = AlertDialog.Builder(this@StrategyManagerActivity)
@@ -276,32 +281,170 @@ class StrategyManagerActivity : AppCompatActivity() {
         conditions: MutableList<TargetCondition>,
         onChanged: () -> Unit,
     ) {
-        val types = listOf(
-            "域名 DOMAIN", "域名后缀 DOMAIN_SUFFIX", "域名关键词 DOMAIN_KEYWORD",
-            "IP 地址 IP", "IP 网段 IP_CIDR", "GeoIP GEOIP", "GeoSite GEOSITE"
-        )
-        val type = spinner(types)
-        val value = edit("匹配值（域名、IP、CIDR、GeoIP 国家代码或 GeoSite 标签）")
+        scope.launch {
+            val ruleSets = database.openRuleSetDao().queryAll()
+            val types = listOf(
+                "域名 DOMAIN", "域名后缀 DOMAIN_SUFFIX", "域名关键词 DOMAIN_KEYWORD",
+                "IP 地址 IP", "IP 网段 IP_CIDR", "GeoIP GEOIP", "GeoSite GEOSITE",
+                "IP 集合 IP_SET", "域名集合 DOMAIN_SET"
+            )
+            val type = spinner(types)
+            val value = edit("匹配值（域名、IP、CIDR、国家代码或 GeoSite 标签）")
+            val setOptions = ruleSets.map { "${it.name} · ${if (it.kind == RuleSet.KIND_IP) "IP" else "域名"}" }
+            val setSelector = spinner(setOptions.ifEmpty { listOf("暂无规则集，请先创建") })
+            val form = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(24), dp(8), dp(24), 0)
+                addView(label("匹配类型")); addView(type)
+                addView(label("普通匹配值（规则集类型不使用此字段）")); addView(value)
+                addView(label("规则集（仅 IP_SET / DOMAIN_SET 使用）")); addView(setSelector)
+            }
+            AlertDialog.Builder(this@StrategyManagerActivity).setTitle("添加匹配规则").setView(form)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("添加") { _, _ ->
+                    val matcher = types[type.selectedItemPosition].substringAfterLast(' ')
+                    val setMatcher = matcher == PolicyCondition.IP_SET || matcher == PolicyCondition.DOMAIN_SET
+                    val raw = if (setMatcher) {
+                        val selected = ruleSets.getOrNull(setSelector.selectedItemPosition)
+                            ?: return@setPositiveButton toast("请先创建规则集")
+                        val expected = if (matcher == PolicyCondition.IP_SET) RuleSet.KIND_IP else RuleSet.KIND_DOMAIN
+                        if (selected.kind != expected) return@setPositiveButton toast("请选择类型匹配的规则集")
+                        if (!selected.enabled) return@setPositiveButton toast("该规则集已停用")
+                        selected.id
+                    } else value.text.toString().trim()
+                    if (raw.isBlank()) return@setPositiveButton toast("请输入匹配值")
+                    val groupMode = if (matchModeIndex == 1) TargetCondition.GROUP_ALL else TargetCondition.GROUP_ANY
+                    conditions += TargetCondition(
+                        targetSetId = targetSetId,
+                        groupMode = groupMode,
+                        matcherType = matcher,
+                        matcherValue = raw,
+                    )
+                    onChanged()
+                }.show()
+        }
+    }
+
+    private fun showRuleSetManager() {
+        scope.launch {
+            val sets = database.openRuleSetDao().queryAll()
+            val labels = sets.map { "${it.name} · ${it.kind} · ${it.sourceType}" }.toTypedArray()
+            AlertDialog.Builder(this@StrategyManagerActivity)
+                .setTitle("IP / 域名规则集")
+                .setItems(labels) { _, index -> showRuleSetActions(sets[index]) }
+                .setPositiveButton("＋ 新建规则集") { _, _ -> showRuleSetEditor(null) }
+                .setNegativeButton("关闭", null)
+                .show()
+        }
+    }
+
+    private fun showRuleSetActions(ruleSet: RuleSet) {
+        AlertDialog.Builder(this).setTitle(ruleSet.name)
+            .setItems(arrayOf("编辑", if (ruleSet.enabled) "停用" else "启用", "删除")) { _, which ->
+                when (which) {
+                    0 -> showRuleSetEditor(ruleSet)
+                    1 -> scope.launch {
+                        database.openRuleSetDao().setEnabled(ruleSet.id, !ruleSet.enabled)
+                        showRuleSetManager()
+                    }
+                    2 -> scope.launch {
+                        val targetDao = database.openTargetSetDao()
+                        val referenced = targetDao.queryAll().any { target ->
+                            targetDao.queryConditions(target.id).any {
+                                (it.matcherType == PolicyCondition.IP_SET || it.matcherType == PolicyCondition.DOMAIN_SET) &&
+                                    it.matcherValue == ruleSet.id
+                            }
+                        }
+                        if (referenced) {
+                            toast("该规则集仍被目标集合引用，不能删除")
+                        } else {
+                            database.openRuleSetDao().delete(ruleSet.id)
+                            showRuleSetManager()
+                        }
+                    }
+                }
+            }.setNegativeButton("返回", null).show()
+    }
+
+    private fun showRuleSetEditor(existing: RuleSet?) {
+        val name = edit("规则集名称").apply { setText(existing?.name.orEmpty()) }
+        val kind = spinner(listOf("IP 规则集", "域名规则集")).apply {
+            setSelection(if (existing?.kind == RuleSet.KIND_DOMAIN) 1 else 0)
+        }
+        val sourceType = spinner(listOf("远程 URL", "本地文件", "内置标识")).apply {
+            setSelection(when (existing?.sourceType) {
+                RuleSet.SOURCE_FILE -> 1
+                RuleSet.SOURCE_BUILTIN -> 2
+                else -> 0
+            })
+        }
+        val sourceValue = edit("规则集 URL、文件路径或内置标识").apply { setText(existing?.sourceValue.orEmpty()) }
+        val format = spinner(listOf("MRS", "CLASSICAL", "TEXT")).apply {
+            setSelection(when (existing?.format) {
+                RuleSet.FORMAT_CLASSICAL -> 1
+                RuleSet.FORMAT_TEXT -> 2
+                else -> 0
+            })
+        }
+        val interval = edit("更新间隔（小时）").apply {
+            setText(((existing?.updateInterval ?: 86400000L) / 3600000L).toString())
+        }
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(8), dp(24), 0)
-            addView(label("匹配类型")); addView(type)
-            addView(label("匹配值")); addView(value)
+            addView(label("名称")); addView(name)
+            addView(label("类型")); addView(kind)
+            addView(label("来源")); addView(sourceType)
+            addView(label("来源地址 / 路径 / 标识")); addView(sourceValue)
+            addView(label("格式")); addView(format)
+            addView(label("更新间隔（小时）")); addView(interval)
         }
-        AlertDialog.Builder(this).setTitle("添加匹配规则").setView(form)
+        AlertDialog.Builder(this).setTitle(if (existing == null) "新建规则集" else "编辑规则集")
+            .setView(form)
             .setNegativeButton("取消", null)
-            .setPositiveButton("添加") { _, _ ->
-                val raw = value.text.toString().trim()
-                if (raw.isBlank()) return@setPositiveButton toast("请输入匹配值")
-                val matcher = types[type.selectedItemPosition].substringAfterLast(' ')
-                val groupMode = if (matchModeIndex == 1) TargetCondition.GROUP_ALL else TargetCondition.GROUP_ANY
-                conditions += TargetCondition(
-                    targetSetId = targetSetId,
-                    groupMode = groupMode,
-                    matcherType = matcher,
-                    matcherValue = raw,
+            .setPositiveButton("保存") { _, _ ->
+                val setName = name.text.toString().trim()
+                val source = sourceValue.text.toString().trim()
+                val hours = interval.text.toString().toLongOrNull() ?: 24L
+                if (setName.isBlank() || source.isBlank()) return@setPositiveButton toast("名称和来源不能为空")
+                if (hours < 1L) return@setPositiveButton toast("更新间隔至少为 1 小时")
+                val saved = existing?.copy(
+                    name = setName,
+                    kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
+                    sourceType = when (sourceType.selectedItemPosition) {
+                        1 -> RuleSet.SOURCE_FILE
+                        2 -> RuleSet.SOURCE_BUILTIN
+                        else -> RuleSet.SOURCE_URL
+                    },
+                    sourceValue = source,
+                    format = when (format.selectedItemPosition) {
+                        1 -> RuleSet.FORMAT_CLASSICAL
+                        2 -> RuleSet.FORMAT_TEXT
+                        else -> RuleSet.FORMAT_MRS
+                    },
+                    updateInterval = hours * 3600000L,
+                    updatedAt = System.currentTimeMillis()
+                ) ?: RuleSet(
+                    name = setName,
+                    kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
+                    sourceType = when (sourceType.selectedItemPosition) {
+                        1 -> RuleSet.SOURCE_FILE
+                        2 -> RuleSet.SOURCE_BUILTIN
+                        else -> RuleSet.SOURCE_URL
+                    },
+                    sourceValue = source,
+                    format = when (format.selectedItemPosition) {
+                        1 -> RuleSet.FORMAT_CLASSICAL
+                        2 -> RuleSet.FORMAT_TEXT
+                        else -> RuleSet.FORMAT_MRS
+                    },
+                    updateInterval = hours * 3600000L
                 )
-                onChanged()
+                scope.launch {
+                    runCatching { database.openRuleSetDao().upsert(saved) }
+                        .onSuccess { toast("规则集已保存"); showRuleSetManager() }
+                        .onFailure { toast("保存失败：${it.message}") }
+                }
             }.show()
     }
 
