@@ -26,8 +26,8 @@ var processors = []processor{
 	patchDns,
 	patchTun,
 	patchListeners,
-	patchProviders,
 	patchStrategy,
+	patchProviders,
 	validConfig,
 }
 
@@ -137,14 +137,26 @@ func patchStrategy(cfg *config.RawConfig, profileDir string) error {
 	}
 
 	var overlay struct {
-		ProxyGroups []map[string]any `json:"proxy-groups"`
-		Rules       []string         `json:"rules"`
+		ProxyGroups  []map[string]any            `json:"proxy-groups"`
+		RuleProviders map[string]map[string]any `json:"rule-providers"`
+		Rules        []string                    `json:"rules"`
 	}
 	if err := json.Unmarshal(data, &overlay); err != nil {
 		return fmt.Errorf("decode generated strategy overlay: %w", err)
 	}
 
 	cfg.ProxyGroup = append(cfg.ProxyGroup, overlay.ProxyGroups...)
+	if len(overlay.RuleProviders) > 0 {
+		if cfg.RuleProvider == nil {
+			cfg.RuleProvider = make(map[string]map[string]any)
+		}
+		for name, provider := range overlay.RuleProviders {
+			if _, exists := cfg.RuleProvider[name]; exists {
+				return fmt.Errorf("generated rule-provider %q conflicts with profile provider", name)
+			}
+			cfg.RuleProvider[name] = provider
+		}
+	}
 	if len(overlay.Rules) > 0 {
 		// User-defined rules have explicit priorities and must precede base
 		// profile rules, including a terminal MATCH rule.
