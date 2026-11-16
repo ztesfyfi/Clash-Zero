@@ -331,7 +331,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             val matchedCount = sourceProfile?.let { profile ->
                 currentNodes[profile.uuid].orEmpty().count { node ->
                     if (group.mode == NodeGroup.MODE_NAME_REGION) {
-                        node.exitCountryCode.equals(group.regionCode, ignoreCase = true)
+                        node.exitLookupVerified && node.exitCountryCode.equals(group.regionCode, ignoreCase = true)
                     } else {
                         group.nameKeyword.isNullOrBlank() || node.originalName.contains(group.nameKeyword, ignoreCase = true)
                     }
