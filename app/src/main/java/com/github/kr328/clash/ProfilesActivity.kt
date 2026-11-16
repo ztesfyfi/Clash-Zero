@@ -260,12 +260,16 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             require(name.isNotBlank()) { "节点组名称不能为空" }
                             require(dao.queryAll().none { group -> group.name.equals(name, true) }) { "节点组名称已存在" }
                             val tag = it.nameTag
+                            val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
                             if (it.mode == NodeGroup.MODE_NAME) {
                                 val sourceUuid = runCatching { UUID.fromString(tag) }.getOrNull()
                                     ?: error("动态组必须关联一个有效订阅")
                                 require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
+                                require(it.nameKeyword == null || keyword != null) { "动态组筛选关键字不能为空" }
+                            } else {
+                                require(keyword == null) { "只有订阅动态组可以设置节点名称关键字" }
                             }
-                            dao.upsert(NodeGroup(name = name, mode = it.mode, nameTag = tag))
+                            dao.upsert(NodeGroup(name = name, mode = it.mode, nameTag = tag, nameKeyword = keyword))
                             design.fetch()
                             design.showNodeGroupManager()
                         }
