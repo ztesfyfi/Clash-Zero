@@ -109,17 +109,17 @@ object TargetSetRuleCompiler {
                 .put("format", when (ruleSet.format) {
                     RuleSet.FORMAT_MRS -> "mrs"
                     RuleSet.FORMAT_TEXT -> "text"
-                    RuleSet.FORMAT_CLASSICAL -> "yaml"
                     else -> error("规则集“${ruleSet.name}”格式不支持")
                 })
-                .put("interval", (ruleSet.updateInterval / 1000L).coerceAtLeast(3600L))
             when (ruleSet.sourceType) {
                 RuleSet.SOURCE_URL -> {
                     val url = ruleSet.sourceValue.trim()
                     require(url.startsWith("https://", true) || url.startsWith("http://", true)) {
                         "规则集“${ruleSet.name}”必须使用 HTTP(S) URL"
                     }
-                    provider.put("url", url).put("path", "rule-providers/$name")
+                    provider.put("url", url)
+                        .put("path", "rule-providers/$name")
+                        .put("interval", (ruleSet.updateInterval / 1000L).coerceAtLeast(3600L))
                 }
                 RuleSet.SOURCE_FILE -> {
                     val source = File(ruleSet.sourceValue.trim())
