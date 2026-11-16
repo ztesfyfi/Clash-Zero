@@ -12,6 +12,7 @@ data class NodeGroupCandidate(
     val displayName: String,
     val exitRegionCode: String? = null,
     val exitRegionVerified: Boolean = false,
+    val originalName: String = displayName,
 )
 
 object NodeGroupMatcher {
@@ -56,7 +57,7 @@ object NodeGroupMatcher {
                 val sourceProfile = group.nameTag ?: return false
                 candidate.profileUuid.equals(sourceProfile, ignoreCase = true) &&
                     (group.nameKeyword.isNullOrBlank() ||
-                        candidate.displayName.contains(group.nameKeyword, ignoreCase = true))
+                        candidate.originalName.contains(group.nameKeyword, ignoreCase = true))
             }
             NodeGroup.MODE_NAME_REGION -> {
                 val sourceProfile = group.nameTag ?: return false
