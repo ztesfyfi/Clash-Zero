@@ -49,9 +49,9 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class CreateNodeGroup(val name: String) : Request()
         data class DeleteNodeGroup(val id: String) : Request()
         data class EnableNodeGroup(val id: String, val enabled: Boolean) : Request()
-        data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?, val nameKeyword: String? = null) : Request()
+        data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?, val nameKeyword: String? = null, val regionCode: String? = null) : Request()
         data class RenameManagedNodeGroup(val id: String, val name: String) : Request()
-        data class UpdateManagedDynamicNodeGroup(val id: String, val nameTag: String, val nameKeyword: String?) : Request()
+        data class UpdateManagedDynamicNodeGroup(val id: String, val nameTag: String, val nameKeyword: String?, val mode: String = NodeGroup.MODE_NAME, val regionCode: String? = null) : Request()
         data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class DeleteManagedNodeGroup(val id: String) : Request()
         data class ReplaceManagedNodeGroupMembers(val id: String, val members: List<NodeGroupMember>) : Request()
@@ -315,14 +315,26 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     fun showNodeGroupManager() {
         val groups = managedNodeGroups
         val labels = groups.map { group ->
-            val mode = if (group.mode == NodeGroup.MODE_STATIC) "静态组" else if (group.nameKeyword.isNullOrBlank()) "订阅动态组" else "关键字动态组"
+            val mode = when (group.mode) {
+                NodeGroup.MODE_STATIC -> "静态组"
+                NodeGroup.MODE_NAME_REGION -> "地区动态组"
+                else -> if (group.nameKeyword.isNullOrBlank()) "订阅动态组" else "关键字动态组"
+            }
             val count = managedNodeMembers[group.id].orEmpty().size
             val sourceProfile = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }
             val source = sourceProfile?.name ?: "关联订阅不可用"
-            val filter = group.nameKeyword?.takeIf { it.isNotBlank() }?.let { " · 包含：$it" }.orEmpty()
+            val filter = if (group.mode == NodeGroup.MODE_NAME_REGION) {
+                " · 地区：${group.regionCode ?: "未设置"}"
+            } else {
+                group.nameKeyword?.takeIf { it.isNotBlank() }?.let { " · 包含：$it" }.orEmpty()
+            }
             val matchedCount = sourceProfile?.let { profile ->
                 currentNodes[profile.uuid].orEmpty().count { node ->
-                    group.nameKeyword.isNullOrBlank() || node.originalName.contains(group.nameKeyword, ignoreCase = true)
+                    if (group.mode == NodeGroup.MODE_NAME_REGION) {
+                        node.exitCountryCode.equals(group.regionCode, ignoreCase = true)
+                    } else {
+                        group.nameKeyword.isNullOrBlank() || node.originalName.contains(group.nameKeyword, ignoreCase = true)
+                    }
                 }
             }
             val dynamicSummary = source + filter + (matchedCount?.let { " · $it 个匹配节点" } ?: "")
@@ -339,7 +351,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private fun showManagedNodeGroupActions(group: NodeGroup) {
         val actions = mutableListOf<String>()
         if (group.mode == NodeGroup.MODE_STATIC) actions.add("管理组内节点")
-        if (group.mode == NodeGroup.MODE_NAME) actions.add("编辑动态筛选")
+        if (group.mode == NodeGroup.MODE_NAME || group.mode == NodeGroup.MODE_NAME_REGION) actions.add("编辑动态筛选")
         actions.add("重命名")
         actions.add(if (group.enabled) "停用" else "启用")
         actions.add("删除")
@@ -380,7 +392,8 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                         .setItems(arrayOf(
                             "静态组（手动选择节点）",
                             "动态组（关联整个订阅）",
-                            "动态组（按节点名称关键字筛选）"
+                            "动态组（按节点名称关键字筛选）",
+                            "动态组（按真实出口 IP 国家/地区筛选）"
                         )) { _, mode ->
                             if (mode == 0) {
                                 requests.trySend(Request.CreateManagedNodeGroup(name, NodeGroup.MODE_STATIC, null))
@@ -396,6 +409,12 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                                                 requests.trySend(Request.CreateManagedNodeGroup(
                                                     name, NodeGroup.MODE_NAME, sourceId
                                                 ))
+                                            } else if (mode == 3) {
+                                                showRegionCodePicker { code ->
+                                                    requests.trySend(Request.CreateManagedNodeGroup(
+                                                        name, NodeGroup.MODE_NAME_REGION, sourceId, regionCode = code
+                                                    ))
+                                                }
                                             } else {
                                                 val keywordInput = EditText(context).apply {
                                                     setSingleLine(true)
@@ -440,28 +459,46 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             .setPositiveButton(R.string.ok) { _, _ ->
                 val sourceId = sources.getOrNull(selectedIndex)?.uuid?.toString() ?: return@setPositiveButton
                 MaterialAlertDialogBuilder(context).setTitle("动态组筛选方式")
-                    .setItems(arrayOf("关联整个订阅", "按节点名称关键字筛选")) { _, mode ->
-                        if (mode == 0) {
-                            requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, null))
-                        } else {
-                            val keywordInput = EditText(context).apply {
-                                setSingleLine(true)
-                                hint = "输入节点名称关键字"
-                                setText(group.nameKeyword.orEmpty())
+                    .setItems(arrayOf("关联整个订阅", "按节点名称关键字筛选", "按真实出口 IP 国家/地区筛选")) { _, mode ->
+                        when (mode) {
+                            0 -> requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, null))
+                            1 -> {
+                                val keywordInput = EditText(context).apply {
+                                    setSingleLine(true)
+                                    hint = "输入节点名称关键字"
+                                    setText(group.nameKeyword.orEmpty())
+                                }
+                                MaterialAlertDialogBuilder(context).setTitle("设置节点筛选关键字")
+                                    .setView(keywordInput)
+                                    .setNegativeButton(R.string.cancel, null)
+                                    .setPositiveButton(R.string.ok) { _, _ ->
+                                        val keyword = keywordInput.text.toString().trim()
+                                        if (keyword.isBlank()) {
+                                            launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
+                                        } else {
+                                            requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, keyword))
+                                        }
+                                    }.show()
                             }
-                            MaterialAlertDialogBuilder(context).setTitle("设置节点筛选关键字")
-                                .setView(keywordInput)
-                                .setNegativeButton(R.string.cancel, null)
-                                .setPositiveButton(R.string.ok) { _, _ ->
-                                    val keyword = keywordInput.text.toString().trim()
-                                    if (keyword.isBlank()) {
-                                        launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
-                                    } else {
-                                        requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, keyword))
-                                    }
-                                }.show()
+                            2 -> showRegionCodePicker { code ->
+                                requests.trySend(Request.UpdateManagedDynamicNodeGroup(
+                                    group.id, sourceId, null, NodeGroup.MODE_NAME_REGION, code
+                                ))
+                            }
                         }
                     }.show()
+            }.show()
+    }
+
+    private fun showRegionCodePicker(onSelected: (String) -> Unit) {
+        val regions = listOf(
+            "美国" to "US", "日本" to "JP", "新加坡" to "SG", "香港" to "HK",
+            "台湾" to "TW", "韩国" to "KR", "英国" to "GB", "德国" to "DE",
+            "法国" to "FR", "加拿大" to "CA", "澳大利亚" to "AU", "荷兰" to "NL"
+        )
+        MaterialAlertDialogBuilder(context).setTitle("选择出口国家/地区")
+            .setItems(regions.map { "${it.first} (${it.second})" }.toTypedArray()) { _, which ->
+                onSelected(regions[which].second)
             }.show()
     }
 
