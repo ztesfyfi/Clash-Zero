@@ -23,6 +23,12 @@ object StrategyConfigCompiler {
         val nodeGroups = database.openNodeGroupDao().queryAll().filter { it.enabled }
         val strategies = database.openStrategyGroupDao().queryAll().filter { it.enabled }
         val policies = database.openRoutingPolicyDao().queryAll().filter { it.enabled }
+        val proxyServiceDao = database.openProxyServiceDao()
+        val proxyServices = proxyServiceDao.queryAll().filter { it.enabled }
+        val serviceNodeMembers = proxyServices.associate { service ->
+            service.id to proxyServiceDao.queryNodeGroups(service.id)
+        }
+        val serviceTargetBindings = proxyServiceDao.queryAllTargetBindings()
 
         val nodeGroupIds = nodeGroups.map { it.id }.toSet()
         val strategyIds = strategies.map { it.id }.toSet()
@@ -53,10 +59,12 @@ object StrategyConfigCompiler {
                 .map { it.originalName }
                 .distinct()
         }
-        val referencedNodeGroupIds = strategyMembers.values.flatten()
-            .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
-            .map { it.memberId }
-            .toSet()
+        val referencedNodeGroupIds = (
+            strategyMembers.values.flatten()
+                .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+                .map { it.memberId } +
+            serviceNodeMembers.values.flatten().map { it.nodeGroupId }
+        ).toSet()
         nodeGroups.filter {
             it.id in referencedNodeGroupIds &&
                 it.mode == NodeGroup.MODE_NAME_REGION &&
@@ -67,9 +75,7 @@ object StrategyConfigCompiler {
             }
         }
         val nodeNames = nodeGroups.filter { group ->
-            group.id in strategyMembers.values.flatten()
-                .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
-                .map { it.memberId } &&
+            group.id in referencedNodeGroupIds &&
                 when (group.mode) {
                     NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
                     NodeGroup.MODE_NAME -> group.nameTag == profileUuid.toString()
@@ -152,6 +158,24 @@ object StrategyConfigCompiler {
             proxyGroups.put(json)
         }
 
+        val serviceNames = proxyServices.associate { it.id to proxyServiceName(it.id) }
+        for (service in proxyServices) {
+            val members = serviceNodeMembers[service.id].orEmpty().sortedBy { it.position }
+            require(members.isNotEmpty()) { "代理服务没有选择节点组：" + service.name }
+            require(members.all { it.nodeGroupId in nodeNames }) { "代理服务引用了当前订阅不可用的节点组：" + service.name }
+            val names = members.map { nodeNames.getValue(it.nodeGroupId) }
+            val type = when (service.mode) {
+                ProxyService.MODE_URL_TEST -> "url-test"
+                ProxyService.MODE_FALLBACK -> "fallback"
+                ProxyService.MODE_LOAD_BALANCE -> "load-balance"
+                ProxyService.MODE_SELECT -> "select"
+                else -> error("未知代理服务类型：" + service.mode)
+            }
+            val json = JSONObject().put("name", serviceNames.getValue(service.id)).put("type", type).put("proxies", JSONArray(names))
+            if (type == "url-test" || type == "fallback") json.put("url", TEST_URL).put("interval", if (type == "fallback") 60 else 300).put("timeout", 5000).put("max-failed-times", 2)
+            if (type == "load-balance") json.put("strategy", "consistent-hashing")
+            proxyGroups.put(json)
+        }
         val legacyRules = JSONArray()
         fun matcherExpression(condition: PolicyCondition): String {
             require(condition.matcherType != PolicyCondition.IP_SET &&
@@ -195,23 +219,21 @@ object StrategyConfigCompiler {
         val targetSets = database.openTargetSetDao().queryAll()
         val targetProviders = JSONObject()
         val targetRules = JSONArray()
-        if (targetSetOutboundBindings.isNotEmpty()) {
-            val conditionsBySet = targetSets.associate { targetSet ->
-                targetSet.id to database.openTargetSetDao().queryConditions(targetSet.id)
-            }
+        val outboundByTargetSet = serviceTargetBindings.associate { binding ->
+            binding.targetSetId to (serviceNames[binding.serviceId] ?: error("目标集合绑定了不存在或已停用的代理服务"))
+        }
+        val validationError = ProxyServiceValidator.validate(proxyServices, nodeGroups, targetSets, serviceNodeMembers, serviceTargetBindings)
+        require(validationError == null) { validationError ?: "代理服务配置无效" }
+        require(targetSetOutboundBindings.isEmpty() || targetSetOutboundBindings == outboundByTargetSet) { "目标集合出口绑定由代理服务统一管理" }
+        if (targetSets.any { it.enabled }) {
+            val conditionsBySet = targetSets.associate { targetSet -> targetSet.id to database.openTargetSetDao().queryConditions(targetSet.id) }
             val targetOutput = TargetSetRuleCompiler.compile(
-                targetSets = targetSets,
-                conditionsByTargetSet = conditionsBySet,
-                ruleSets = database.openRuleSetDao().queryAll(),
-                outboundByTargetSet = targetSetOutboundBindings,
+                targetSets = targetSets, conditionsByTargetSet = conditionsBySet,
+                ruleSets = database.openRuleSetDao().queryAll(), outboundByTargetSet = outboundByTargetSet,
                 profileDirectory = context.filesDir.resolve("imported").resolve(profileUuid.toString()),
             )
-            for (key in targetOutput.providers.keys()) {
-                targetProviders.put(key, targetOutput.providers.getJSONObject(key))
-            }
-            for (index in 0 until targetOutput.rules.length()) {
-                targetRules.put(targetOutput.rules.getString(index))
-            }
+            for (key in targetOutput.providers.keys()) targetProviders.put(key, targetOutput.providers.getJSONObject(key))
+            for (index in 0 until targetOutput.rules.length()) targetRules.put(targetOutput.rules.getString(index))
         }
 
         // New target-set routing takes precedence over legacy policies.
@@ -235,4 +257,5 @@ object StrategyConfigCompiler {
 
     private fun nodeGroupName(id: String) = PREFIX + "NG-" + id.replace("-", "").take(20)
     private fun strategyName(id: String) = PREFIX + "SG-" + id.replace("-", "").take(20)
+    private fun proxyServiceName(id: String) = PREFIX + "PS-" + id.replace("-", "").take(20)
 }
