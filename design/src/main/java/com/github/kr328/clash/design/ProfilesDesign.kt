@@ -431,13 +431,14 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             launch { showToast("没有可关联的订阅，请先导入订阅。", ToastDuration.Long) }
             return
         }
-        val currentIndex = sources.indexOfFirst { it.uuid.toString() == group.nameTag }.coerceAtLeast(0)
+        var selectedIndex = sources.indexOfFirst { it.uuid.toString() == group.nameTag }.coerceAtLeast(0)
         MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
-            .setSingleChoiceItems(sources.map { it.name }.toTypedArray(), currentIndex, null)
+            .setSingleChoiceItems(sources.map { it.name }.toTypedArray(), selectedIndex) { _, which ->
+                selectedIndex = which
+            }
             .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.ok) { dialog, _ ->
-                val selected = (dialog as androidx.appcompat.app.AlertDialog).listView.checkedItemPosition
-                val sourceId = sources.getOrNull(selected)?.uuid?.toString() ?: return@setPositiveButton
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val sourceId = sources.getOrNull(selectedIndex)?.uuid?.toString() ?: return@setPositiveButton
                 MaterialAlertDialogBuilder(context).setTitle("动态组筛选方式")
                     .setItems(arrayOf("关联整个订阅", "按节点名称关键字筛选")) { _, mode ->
                         if (mode == 0) {
