@@ -15,6 +15,7 @@ object TargetSetValidator {
         }
         if (conditions.isEmpty()) return "目标集合至少需要一条匹配规则"
         if (conditions.any { it.targetSetId != targetSet.id }) return "匹配规则所属目标集合不一致"
+        if (conditions.any { it.conditionGroup.isBlank() }) return "规则组标识不能为空"
 
         val setsById = ruleSets.associateBy { it.id }
         if (conditions.map { it.conditionGroup }.distinct().size != 1) {
