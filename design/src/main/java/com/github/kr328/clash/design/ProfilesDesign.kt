@@ -316,7 +316,8 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         val labels = groups.map { group ->
             val mode = if (group.mode == NodeGroup.MODE_STATIC) "静态组" else "订阅动态组"
             val count = managedNodeMembers[group.id].orEmpty().size
-            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else group.nameTag.orEmpty()}"
+            val source = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }?.name ?: "关联订阅不可用"
+            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else source}"
         }.toTypedArray()
         MaterialAlertDialogBuilder(context)
             .setTitle("节点管理 · 节点组")
@@ -369,14 +370,17 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                             if (mode == 0) {
                                 requests.trySend(Request.CreateManagedNodeGroup(name, NodeGroup.MODE_STATIC, null))
                             } else {
-                                val tagInput = EditText(context).apply { setSingleLine(true); hint = "订阅名称" }
-                                MaterialAlertDialogBuilder(context).setTitle("关联订阅").setMessage("动态组按订阅名称前缀自动匹配节点。")
-                                    .setView(tagInput).setNegativeButton(R.string.cancel, null)
-                                    .setPositiveButton(R.string.ok) { _, _ ->
-                                        val tag = tagInput.text.toString().trim()
-                                        if (tag.isBlank()) launch { showToast("订阅名称不能为空。", ToastDuration.Long) }
-                                        else requests.trySend(Request.CreateManagedNodeGroup(name, NodeGroup.MODE_NAME, tag))
-                                    }.show()
+                                val sources = currentProfiles.filter { it.imported }
+                                if (sources.isEmpty()) {
+                                    launch { showToast("没有可关联的订阅，请先导入订阅。", ToastDuration.Long) }
+                                } else {
+                                    MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
+                                        .setItems(sources.map { it.name }.toTypedArray()) { _, selected ->
+                                            requests.trySend(Request.CreateManagedNodeGroup(
+                                                name, NodeGroup.MODE_NAME, sources[selected].uuid.toString()
+                                            ))
+                                        }.show()
+                                }
                             }
                         }.show()
                 }
