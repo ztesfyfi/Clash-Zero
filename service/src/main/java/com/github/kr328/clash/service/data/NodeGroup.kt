@@ -26,6 +26,7 @@ data class NodeGroup(
     @ColumnInfo(name = "mode") val mode: String,
     /** Source subscription UUID for NAME and NAME_REGION dynamic groups. */
     @ColumnInfo(name = "nameTag") val nameTag: String? = null,
+    @ColumnInfo(name = "nameKeyword") val nameKeyword: String? = null,
     @ColumnInfo(name = "regionCode") val regionCode: String? = null,
     @ColumnInfo(name = "iconMode", defaultValue = "'AUTO'") val iconMode: String = StrategyGroup.ICON_AUTO,
     @ColumnInfo(name = "iconType") val iconType: String? = null,
