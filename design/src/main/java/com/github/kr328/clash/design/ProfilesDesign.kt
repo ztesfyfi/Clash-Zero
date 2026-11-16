@@ -74,6 +74,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private var managedNodeMembers: Map<String, List<NodeGroupMember>> = emptyMap()
     private var currentProfiles: List<Profile> = emptyList()
     private var currentNodes: Map<java.util.UUID, List<ProfileNodeItem>> = emptyMap()
+    private var currentNodeErrors: Map<java.util.UUID, String> = emptyMap()
     private var nodeSettings = ProfileNodeSettingsItem()
     private val adapter = ProfileAdapter(
         context, this::showMenu, this::showNodeDetails,
@@ -102,6 +103,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     ) {
         currentProfiles = profiles
         currentNodes = nodes
+        currentNodeErrors = errors
         managedNodeGroups = managedGroups
         managedNodeMembers = managedMembers
         nodeGroups = groups
@@ -511,7 +513,9 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         }
         val existing = managedNodeMembers[group.id].orEmpty()
         val liveKeys = options.map { "${it.third.profileUuid}:${it.third.proxyKey}" }.toSet()
-        val stale = existing.filter { "${it.profileUuid}:${it.proxyKey}" !in liveKeys }
+        val stale = existing.filter {
+            it.profileUuid !in currentNodeErrors && "${it.profileUuid}:${it.proxyKey}" !in liveKeys
+        }
         if (options.isEmpty() && stale.isEmpty()) {
             launch { showToast("当前没有可管理的订阅节点，请先更新订阅。", ToastDuration.Long) }
             return
