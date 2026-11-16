@@ -101,6 +101,12 @@ object TargetSetRuleCompiler {
         require(providerNames.values.distinct().size == providerNames.size) {
             "规则集生成的 Mihomo provider 名称发生冲突"
         }
+        val providerCacheDirectory = File(profileDirectory, "providers/rules/rule-providers")
+        if (providerNames.isNotEmpty()) {
+            require(providerCacheDirectory.mkdirs() || providerCacheDirectory.isDirectory) {
+                "无法创建 Mihomo 规则集缓存目录：$providerCacheDirectory"
+            }
+        }
         for ((ruleSetId, name) in providerNames) {
             val ruleSet = enabledRuleSets[ruleSetId] ?: error("规则集不存在：$ruleSetId")
             val provider = JSONObject()
@@ -126,10 +132,7 @@ object TargetSetRuleCompiler {
                     require(source.isAbsolute && source.isFile && source.canRead()) {
                         "规则集“${ruleSet.name}”本地文件不存在或不可读取"
                     }
-                    val managedFile = File(profileDirectory, "providers/rules/rule-providers/$name")
-                    require(managedFile.parentFile?.mkdirs() == true || managedFile.parentFile?.isDirectory == true) {
-                        "无法创建本地规则集目录：${managedFile.parentFile}"
-                    }
+                    val managedFile = File(providerCacheDirectory, name)
                     source.copyTo(managedFile, overwrite = true)
                     provider.put("path", "rule-providers/$name")
                 }
