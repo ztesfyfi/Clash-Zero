@@ -54,16 +54,16 @@ object NodeGroupMatcher {
         return when (group.mode) {
             NodeGroup.MODE_STATIC -> false
             NodeGroup.MODE_NAME -> {
-                val tag = group.nameTag ?: return false
-                hasSubscriptionTag(candidate.displayName, tag)
+                val sourceProfile = group.nameTag ?: return false
+                candidate.profileUuid.equals(sourceProfile, ignoreCase = true)
             }
             NodeGroup.MODE_NAME_REGION -> {
-                val tag = group.nameTag ?: return false
+                val sourceProfile = group.nameTag ?: return false
                 val region = group.regionCode ?: return false
-                candidate.exitRegionVerified &&
+                candidate.profileUuid.equals(sourceProfile, ignoreCase = true) &&
+                    candidate.exitRegionVerified &&
                     !candidate.exitRegionCode.isNullOrBlank() &&
-                    candidate.exitRegionCode.equals(region, ignoreCase = true) &&
-                    hasSubscriptionTag(candidate.displayName, tag)
+                    candidate.exitRegionCode.equals(region, ignoreCase = true)
             }
             else -> false
         }
