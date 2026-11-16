@@ -98,6 +98,7 @@ class StrategyManagerActivity : AppCompatActivity() {
             text = when (section) {
                 SECTION_NODE_GROUPS -> "统一管理静态与动态出站节点组。"
                 SECTION_STRATEGY_GROUPS -> "管理代理策略类型、成员组合及出口选择方式。"
+                SECTION_PROXY_SERVICES -> "将目标集合绑定到代理服务，并为服务选择一个或多个节点组。每个目标集合只能绑定一个服务。"
                 else -> "目标集合只定义流量匹配条件，不在这里选择代理出口。"
             }
             textSize = 13f
@@ -139,6 +140,19 @@ class StrategyManagerActivity : AppCompatActivity() {
                             addRow(group.name, detail, group.enabled) { showNodeGroupActions(group) }
                         }
                     }
+                    SECTION_PROXY_SERVICES -> {
+                        val services = database.openProxyServiceDao().queryAll()
+                        val groups = database.openNodeGroupDao().queryAll().associateBy { it.id }
+                        val targets = database.openTargetSetDao().queryAll().associateBy { it.id }
+                        val dao = database.openProxyServiceDao()
+                        if (services.isEmpty()) emptyHint("还没有代理服务，点击右上角新建。")
+                        services.forEach { service ->
+                            val members = dao.queryNodeGroups(service.id).mapNotNull { groups[it.nodeGroupId]?.name }
+                            val bound = dao.queryTargetSets(service.id).mapNotNull { targets[it.targetSetId]?.name }
+                            val detail = strategyModeName(service.mode) + " · " + members.size + " 个节点组 · 绑定 " + bound.size + " 个目标集合"
+                            addRow(service.name, detail, service.enabled) { showProxyServiceActions(service) }
+                        }
+                    }
                     SECTION_STRATEGY_GROUPS -> {
                         val groups = database.openStrategyGroupDao().queryAll()
                         if (groups.isEmpty()) emptyHint("还没有策略组。")
@@ -171,6 +185,89 @@ class StrategyManagerActivity : AppCompatActivity() {
             } catch (error: Exception) {
                 toast("读取失败：${error.message}")
             }
+        }
+    }
+
+    private fun showProxyServiceActions(service: ProxyService) {
+        AlertDialog.Builder(this).setTitle(service.name)
+            .setItems(arrayOf("编辑服务", if (service.enabled) "停用" else "启用", "删除")) { _, which ->
+                when (which) {
+                    0 -> showProxyServiceEditor(service)
+                    1 -> scope.launch {
+                        val bindings = database.openProxyServiceDao().queryTargetSets(service.id)
+                        val active = bindings.any { database.openTargetSetDao().queryById(it.targetSetId)?.enabled == true }
+                        if (service.enabled && active) toast("该服务仍绑定启用的目标集合，请先停用或重新绑定集合")
+                        else {
+                            database.openProxyServiceDao().upsert(service.copy(enabled = !service.enabled))
+                            refresh(apply = true)
+                        }
+                    }
+                    2 -> AlertDialog.Builder(this).setMessage("删除代理服务？目标集合不会删除，删除后将变为未绑定状态。")
+                        .setNegativeButton("取消", null).setPositiveButton("删除") { _, _ ->
+                            scope.launch { database.openProxyServiceDao().delete(service.id); refresh(apply = true) }
+                        }.show()
+                }
+            }.setNegativeButton("取消", null).show()
+    }
+
+    private fun showProxyServiceEditor(existing: ProxyService?) {
+        scope.launch {
+            val dao = database.openProxyServiceDao()
+            val groups = database.openNodeGroupDao().queryAll().filter { it.enabled }
+            val targets = database.openTargetSetDao().queryAll().filter { it.enabled }
+            val oldGroups = dao.queryNodeGroups(existing?.id.orEmpty()).map { it.nodeGroupId }.toSet()
+            val oldTargets = dao.queryTargetSets(existing?.id.orEmpty()).map { it.targetSetId }.toSet()
+            val owners = dao.queryAllTargetBindings().associate { it.targetSetId to it.serviceId }
+            val name = edit("代理服务名称").apply { setText(existing?.name.orEmpty()) }
+            val mode = spinner(listOf("手动选择", "自动择优", "故障转移", "负载均衡"))
+            mode.setSelection(when (existing?.mode) {
+                ProxyService.MODE_URL_TEST -> 1
+                ProxyService.MODE_FALLBACK -> 2
+                ProxyService.MODE_LOAD_BALANCE -> 3
+                else -> 0
+            })
+            val groupChecks = groups.map { group ->
+                CheckBox(this@StrategyManagerActivity).apply {
+                    text = group.name
+                    isChecked = group.id in oldGroups
+                } to group.id
+            }
+            val targetChecks = targets.map { target ->
+                val owner = owners[target.id]
+                CheckBox(this@StrategyManagerActivity).apply {
+                    text = target.name + if (owner != null && owner != existing?.id) "（已被其他服务占用）" else ""
+                    isChecked = target.id in oldTargets
+                    isEnabled = owner == null || owner == existing?.id
+                } to target.id
+            }
+            val form = LinearLayout(this@StrategyManagerActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(24), dp(8), dp(24), 0)
+                addView(label("服务名称")); addView(name)
+                addView(label("出口方式")); addView(mode)
+                addView(label("选择节点组（可多选）")); groupChecks.forEach { addView(it.first) }
+                addView(label("绑定目标集合（每个集合只能绑定一个服务）")); targetChecks.forEach { addView(it.first) }
+            }
+            AlertDialog.Builder(this@StrategyManagerActivity)
+                .setTitle(if (existing == null) "新建代理服务" else "编辑代理服务")
+                .setView(ScrollView(this@StrategyManagerActivity).apply { addView(form) })
+                .setNegativeButton("取消", null).setPositiveButton("保存") { _, _ ->
+                    val selectedGroups = groupChecks.filter { it.first.isChecked }.map { it.second }
+                    val selectedTargets = targetChecks.filter { it.first.isChecked }.map { it.second }
+                    val selectedMode = when (mode.selectedItemPosition) {
+                        1 -> ProxyService.MODE_URL_TEST
+                        2 -> ProxyService.MODE_FALLBACK
+                        3 -> ProxyService.MODE_LOAD_BALANCE
+                        else -> ProxyService.MODE_SELECT
+                    }
+                    val service = existing?.copy(name = name.text.toString().trim(), mode = selectedMode)
+                        ?: ProxyService(name = name.text.toString().trim(), mode = selectedMode)
+                    scope.launch {
+                        runCatching { ProxyServiceRepository(database).save(service, selectedGroups, selectedTargets) }
+                            .onSuccess { toast("代理服务已保存"); refresh(apply = true) }
+                            .onFailure { toast("保存失败：" + it.message) }
+                    }
+                }.show()
         }
     }
 
