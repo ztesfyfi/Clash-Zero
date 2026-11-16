@@ -51,6 +51,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class EnableNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?, val nameKeyword: String? = null) : Request()
         data class RenameManagedNodeGroup(val id: String, val name: String) : Request()
+        data class UpdateManagedDynamicNodeGroup(val id: String, val nameTag: String, val nameKeyword: String?) : Request()
         data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class DeleteManagedNodeGroup(val id: String) : Request()
         data class ReplaceManagedNodeGroupMembers(val id: String, val members: List<NodeGroupMember>) : Request()
@@ -338,6 +339,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private fun showManagedNodeGroupActions(group: NodeGroup) {
         val actions = mutableListOf<String>()
         if (group.mode == NodeGroup.MODE_STATIC) actions.add("管理组内节点")
+        if (group.mode == NodeGroup.MODE_NAME) actions.add("编辑动态筛选")
         actions.add("重命名")
         actions.add(if (group.enabled) "停用" else "启用")
         actions.add("删除")
@@ -345,6 +347,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             .setItems(actions.toTypedArray()) { _, which ->
                 when (actions[which]) {
                     "管理组内节点" -> showManagedNodeMembers(group)
+                    "编辑动态筛选" -> showEditManagedDynamicGroup(group)
                     "重命名" -> {
                         val input = EditText(context).apply { setSingleLine(true); setText(group.name) }
                         MaterialAlertDialogBuilder(context).setTitle("重命名节点组").setView(input)
@@ -419,6 +422,45 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                             }
                         }.show()
                 }
+            }.show()
+    }
+
+    private fun showEditManagedDynamicGroup(group: NodeGroup) {
+        val sources = currentProfiles.filter { it.imported }
+        if (sources.isEmpty()) {
+            launch { showToast("没有可关联的订阅，请先导入订阅。", ToastDuration.Long) }
+            return
+        }
+        val currentIndex = sources.indexOfFirst { it.uuid.toString() == group.nameTag }.coerceAtLeast(0)
+        MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
+            .setSingleChoiceItems(sources.map { it.name }.toTypedArray(), currentIndex, null)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { dialog, _ ->
+                val selected = (dialog as androidx.appcompat.app.AlertDialog).listView.checkedItemPosition
+                val sourceId = sources.getOrNull(selected)?.uuid?.toString() ?: return@setPositiveButton
+                MaterialAlertDialogBuilder(context).setTitle("动态组筛选方式")
+                    .setItems(arrayOf("关联整个订阅", "按节点名称关键字筛选")) { _, mode ->
+                        if (mode == 0) {
+                            requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, null))
+                        } else {
+                            val keywordInput = EditText(context).apply {
+                                setSingleLine(true)
+                                hint = "输入节点名称关键字"
+                                setText(group.nameKeyword.orEmpty())
+                            }
+                            MaterialAlertDialogBuilder(context).setTitle("设置节点筛选关键字")
+                                .setView(keywordInput)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.ok) { _, _ ->
+                                    val keyword = keywordInput.text.toString().trim()
+                                    if (keyword.isBlank()) {
+                                        launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
+                                    } else {
+                                        requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, keyword))
+                                    }
+                                }.show()
+                        }
+                    }.show()
             }.show()
     }
 
