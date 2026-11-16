@@ -428,7 +428,7 @@ class StrategyManagerActivity : AppCompatActivity() {
             addView(label("来源")); addView(sourceType)
             addView(label("来源地址 / 路径 / 标识")); addView(sourceValue)
             addView(label("格式")); addView(format)
-            addView(label("更新间隔（小时）")); addView(interval)
+            addView(label("更新间隔（小时，仅远程 URL 生效）")); addView(interval)
         }
         AlertDialog.Builder(this).setTitle(if (existing == null) "新建规则集" else "编辑规则集")
             .setView(form)
