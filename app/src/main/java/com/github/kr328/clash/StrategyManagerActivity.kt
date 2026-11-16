@@ -44,6 +44,7 @@ class StrategyManagerActivity : AppCompatActivity() {
         const val SECTION_NODE_GROUPS = "node_groups"
         const val SECTION_STRATEGY_GROUPS = "strategy_groups"
         const val SECTION_POLICIES = "policies"
+        const val SECTION_PROXY_SERVICES = "proxy_services"
     }
 
     private val scope: CoroutineScope = MainScope()
@@ -57,6 +58,7 @@ class StrategyManagerActivity : AppCompatActivity() {
         val title = when (section) {
             SECTION_NODE_GROUPS -> "出站节点"
             SECTION_STRATEGY_GROUPS -> "代理策略"
+            SECTION_PROXY_SERVICES -> "代理服务"
             else -> "目标分流"
         }
         val root = LinearLayout(this).apply {
@@ -80,6 +82,13 @@ class StrategyManagerActivity : AppCompatActivity() {
             textSize = 22f
             setPadding(dp(12), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        if (section != SECTION_PROXY_SERVICES) header.addView(Button(this).apply {
+            text = "代理服务"
+            setOnClickListener {
+                startActivity(android.content.Intent(this@StrategyManagerActivity, StrategyManagerActivity::class.java)
+                    .putExtra(EXTRA_SECTION, SECTION_PROXY_SERVICES))
+            }
+        })
         header.addView(Button(this).apply {
             text = "＋ 新建"
             setOnClickListener { createItem() }
@@ -107,6 +116,7 @@ class StrategyManagerActivity : AppCompatActivity() {
         when (section) {
             SECTION_NODE_GROUPS -> showNodeGroupEditor(null)
             SECTION_STRATEGY_GROUPS -> showStrategyGroupEditor(null)
+            SECTION_PROXY_SERVICES -> showProxyServiceEditor(null)
             else -> showTargetSetEditor(null)
         }
     }
