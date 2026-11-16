@@ -244,10 +244,19 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         }
         MaterialAlertDialogBuilder(context)
             .setTitle("重命名节点")
+            .setMessage("自定义名称会独立保存，订阅更新后会继续保留。恢复原始名称不会影响节点测速记录和节点标识。")
             .setView(input)
             .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton("恢复原始名称") { _, _ ->
+                requests.trySend(Request.RenameNode(profile, node, node.originalName))
+            }
             .setPositiveButton(R.string.ok) { _, _ ->
-                requests.trySend(Request.RenameNode(profile, node, input.text.toString().trim()))
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    showToast("节点名称不能为空；如需恢复原名，请使用“恢复原始名称”。", ToastDuration.Long)
+                } else {
+                    requests.trySend(Request.RenameNode(profile, node, name))
+                }
             }
             .show()
     }
