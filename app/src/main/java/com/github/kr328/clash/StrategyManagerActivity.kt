@@ -414,12 +414,8 @@ class StrategyManagerActivity : AppCompatActivity() {
             })
         }
         val sourceValue = edit("远程 URL 或本地文件绝对路径").apply { setText(existing?.sourceValue.orEmpty()) }
-        val format = spinner(listOf("MRS", "CLASSICAL", "TEXT")).apply {
-            setSelection(when (existing?.format) {
-                RuleSet.FORMAT_CLASSICAL -> 1
-                RuleSet.FORMAT_TEXT -> 2
-                else -> 0
-            })
+        val format = spinner(listOf("MRS", "TEXT")).apply {
+            setSelection(if (existing?.format == RuleSet.FORMAT_TEXT) 1 else 0)
         }
         val interval = edit("更新间隔（小时）").apply {
             setText(((existing?.updateInterval ?: 86400000L) / 3600000L).toString())
@@ -457,11 +453,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                         else -> RuleSet.SOURCE_URL
                     },
                     sourceValue = source,
-                    format = when (format.selectedItemPosition) {
-                        1 -> RuleSet.FORMAT_CLASSICAL
-                        2 -> RuleSet.FORMAT_TEXT
-                        else -> RuleSet.FORMAT_MRS
-                    },
+                    format = if (format.selectedItemPosition == 1) RuleSet.FORMAT_TEXT else RuleSet.FORMAT_MRS,
                     updateInterval = hours * 3600000L,
                     updatedAt = System.currentTimeMillis()
                 ) ?: RuleSet(
@@ -469,11 +461,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                     kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
                     sourceType = if (sourceType.selectedItemPosition == 1) RuleSet.SOURCE_FILE else RuleSet.SOURCE_URL,
                     sourceValue = source,
-                    format = when (format.selectedItemPosition) {
-                        1 -> RuleSet.FORMAT_CLASSICAL
-                        2 -> RuleSet.FORMAT_TEXT
-                        else -> RuleSet.FORMAT_MRS
-                    },
+                    format = if (format.selectedItemPosition == 1) RuleSet.FORMAT_TEXT else RuleSet.FORMAT_MRS,
                     updateInterval = hours * 3600000L
                 )
                 scope.launch {
