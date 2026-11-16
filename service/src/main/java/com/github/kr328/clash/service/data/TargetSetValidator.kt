@@ -54,6 +54,21 @@ object TargetSetValidator {
                     } else RuleSet.KIND_DOMAIN
                     if (set.kind != expected) return "规则集类型与匹配类型不一致：${set.name}"
                     if (!set.enabled) return "引用的规则集已停用：${set.name}"
+                    if (set.updateInterval < 3600000L) return "规则集更新间隔不能少于 1 小时：${set.name}"
+                    if (set.format !in setOf(RuleSet.FORMAT_MRS, RuleSet.FORMAT_CLASSICAL, RuleSet.FORMAT_TEXT)) {
+                        return "规则集格式不受支持：${set.name}"
+                    }
+                    when (set.sourceType) {
+                        RuleSet.SOURCE_URL -> if (!(set.sourceValue.startsWith("https://", true) ||
+                            set.sourceValue.startsWith("http://", true))) return "规则集 URL 必须使用 HTTP(S)：${set.name}"
+                        RuleSet.SOURCE_FILE -> {
+                            val file = java.io.File(set.sourceValue)
+                            if (!file.isAbsolute || !file.isFile || !file.canRead()) {
+                                return "规则集本地文件不存在或不可读取：${set.name}"
+                            }
+                        }
+                        else -> return "规则集来源类型不受支持：${set.name}"
+                    }
                 }
                 else -> return "不支持的匹配类型：${condition.matcherType}"
             }
