@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.github.kr328.clash.service.data.Database
+import com.github.kr328.clash.service.data.GeoRuleCatalog
 import com.github.kr328.clash.service.data.NodeGroup
 import com.github.kr328.clash.service.data.PolicyCondition
 import com.github.kr328.clash.service.data.RoutingPolicy
@@ -306,6 +307,28 @@ class StrategyManagerActivity : AppCompatActivity() {
                 setPadding(dp(24), dp(8), dp(24), 0)
                 addView(label("匹配类型")); addView(type)
                 addView(label("普通匹配值（规则集类型不使用此字段）")); addView(value)
+                addView(Button(this@StrategyManagerActivity).apply {
+                    text = "选择常用 GeoIP"
+                    setOnClickListener {
+                        AlertDialog.Builder(this@StrategyManagerActivity)
+                            .setTitle("常用 GeoIP")
+                            .setItems(GeoRuleCatalog.geoIp.map { it.name }.toTypedArray()) { _, index ->
+                                type.setSelection(types.indexOfFirst { it.endsWith("GEOIP") })
+                                value.setText(GeoRuleCatalog.geoIp[index].value)
+                            }.setNegativeButton("取消", null).show()
+                    }
+                })
+                addView(Button(this@StrategyManagerActivity).apply {
+                    text = "选择常用 GeoSite"
+                    setOnClickListener {
+                        AlertDialog.Builder(this@StrategyManagerActivity)
+                            .setTitle("常用 GeoSite")
+                            .setItems(GeoRuleCatalog.geoSite.map { it.name }.toTypedArray()) { _, index ->
+                                type.setSelection(types.indexOfFirst { it.endsWith("GEOSITE") })
+                                value.setText(GeoRuleCatalog.geoSite[index].value)
+                            }.setNegativeButton("取消", null).show()
+                    }
+                })
                 addView(label("规则集（仅 IP_SET / DOMAIN_SET 使用）")); addView(setSelector)
             }
             AlertDialog.Builder(this@StrategyManagerActivity).setTitle("添加匹配规则").setView(form)
