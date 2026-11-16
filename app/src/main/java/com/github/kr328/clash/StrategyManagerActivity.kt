@@ -413,7 +413,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                 else -> 0
             })
         }
-        val sourceValue = edit("规则集 URL、文件路径或内置标识").apply { setText(existing?.sourceValue.orEmpty()) }
+        val sourceValue = edit("远程 URL 或本地文件绝对路径").apply { setText(existing?.sourceValue.orEmpty()) }
         val format = spinner(listOf("MRS", "CLASSICAL", "TEXT")).apply {
             setSelection(when (existing?.format) {
                 RuleSet.FORMAT_CLASSICAL -> 1
@@ -445,10 +445,10 @@ class StrategyManagerActivity : AppCompatActivity() {
                 if (sourceType.selectedItemPosition == 0 && !(source.startsWith("https://", true) || source.startsWith("http://", true))) {
                     return@setPositiveButton toast("远程规则集必须使用 HTTP(S) URL")
                 }
-                if (sourceType.selectedItemPosition == 1 && (!java.io.File(source).isAbsolute || !java.io.File(source).isFile)) {
+                if (sourceType.selectedItemPosition == 1 && (!java.io.File(source).isAbsolute || !java.io.File(source).isFile || !java.io.File(source).canRead())) {
                     return@setPositiveButton toast("本地规则集文件不存在，请填写可读取的绝对路径")
                 }
-                if (hours < 1L) return@setPositiveButton toast("更新间隔至少为 1 小时")
+                if (hours !in 1L..8760L) return@setPositiveButton toast("更新间隔必须在 1 小时到 365 天之间")
                 val saved = existing?.copy(
                     name = setName,
                     kind = if (kind.selectedItemPosition == 1) RuleSet.KIND_DOMAIN else RuleSet.KIND_IP,
@@ -477,9 +477,16 @@ class StrategyManagerActivity : AppCompatActivity() {
                     updateInterval = hours * 3600000L
                 )
                 scope.launch {
-                    runCatching { database.openRuleSetDao().upsert(saved) }
-                        .onSuccess { toast("规则集已保存"); showRuleSetManager() }
-                        .onFailure { toast("保存失败：${it.message}") }
+                    val duplicate = database.openRuleSetDao().queryAll().any {
+                        it.id != saved.id && it.name.equals(saved.name.trim(), ignoreCase = true)
+                    }
+                    if (duplicate) {
+                        toast("规则集名称已存在")
+                    } else {
+                        runCatching { database.openRuleSetDao().upsert(saved.copy(name = saved.name.trim())) }
+                            .onSuccess { toast("规则集已保存"); showRuleSetManager() }
+                            .onFailure { toast("保存失败：${it.message}") }
+                    }
                 }
             }.show()
     }
