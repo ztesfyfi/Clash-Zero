@@ -8,6 +8,10 @@ class ProxyServiceRepository(private val database:Database=Database.database) {
   require(targetSetIds.distinct().size==targetSetIds.size) { "不能重复绑定目标集合" }
   val groups=database.openNodeGroupDao().queryAll().associateBy { it.id }
   nodeGroupIds.forEach { id -> val g=groups[id] ?: error("所选节点组不存在：$id"); require(g.enabled) { "节点组“${g.name}”已停用" } }
+  if (service.mode == ProxyService.MODE_LOAD_BALANCE) {
+   val knownRegions = nodeGroupIds.mapNotNull { groups[it]?.regionCode?.uppercase() }.distinct()
+   require(knownRegions.size <= 1) { "负载均衡不建议混用多个已标记地区的节点组，请改用手动选择、自动择优或故障转移" }
+  }
   val targets=database.openTargetSetDao().queryAll().associateBy { it.id }
   targetSetIds.forEach { id -> val t=targets[id] ?: error("目标集合不存在：$id"); require(t.enabled) { "目标集合“${t.name}”已停用" } }
   val dao=database.openProxyServiceDao()
