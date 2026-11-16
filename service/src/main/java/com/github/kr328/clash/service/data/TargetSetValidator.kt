@@ -17,9 +17,15 @@ object TargetSetValidator {
         if (conditions.any { it.targetSetId != targetSet.id }) return "匹配规则所属目标集合不一致"
 
         val setsById = ruleSets.associateBy { it.id }
-        val groupModes = conditions.groupBy { it.conditionGroup }.values
-        if (groupModes.any { group -> group.map { it.groupMode }.distinct().size > 1 }) {
-            return "同一条件组不能混用 AND 和 OR"
+        if (conditions.map { it.conditionGroup }.distinct().size != 1) {
+            return "当前版本每个目标集合暂时只支持一个规则组"
+        }
+        val groupMode = conditions.first().groupMode
+        if (groupMode != TargetCondition.GROUP_ALL && groupMode != TargetCondition.GROUP_ANY) {
+            return "不支持的规则组关系：$groupMode"
+        }
+        if ((targetSet.matchMode == TargetSet.MATCH_ALL) != (groupMode == TargetCondition.GROUP_ALL)) {
+            return "目标集合匹配关系与规则组关系不一致"
         }
 
         for (condition in conditions) {
@@ -30,13 +36,17 @@ object TargetSetValidator {
                     val domain = value.removePrefix(".")
                     if (!domainPattern.matches(domain)) return "无效域名：$value"
                 }
-                PolicyCondition.DOMAIN_KEYWORD -> Unit
+                PolicyCondition.DOMAIN_KEYWORD -> if (value.any { it.isWhitespace() || it == ',' }) {
+                    return "域名关键词不能包含空格或逗号"
+                }
                 PolicyCondition.IP -> if (!isIpAddress(value)) return "无效 IP 地址：$value"
                 PolicyCondition.IP_CIDR -> if (!isCidr(value)) return "无效 IP 网段：$value"
                 PolicyCondition.GEOIP -> if (!value.matches(Regex("(?i)^[a-z]{2}$"))) {
                     return "GeoIP 必须使用两位国家代码"
                 }
-                PolicyCondition.GEOSITE -> Unit
+                PolicyCondition.GEOSITE -> if (!value.matches(Regex("(?i)^[a-z0-9_-]+$"))) {
+                    return "无效 GeoSite 标签：$value"
+                }
                 PolicyCondition.IP_SET, PolicyCondition.DOMAIN_SET -> {
                     val set = setsById[value] ?: return "引用的规则集不存在：$value"
                     val expected = if (condition.matcherType == PolicyCondition.IP_SET) {
@@ -51,8 +61,35 @@ object TargetSetValidator {
         return null
     }
 
-    private fun isIpAddress(value: String): Boolean =
-        isIpv4(value) || (value.contains(':') && value.matches(Regex("(?i)^[0-9a-f:]+$")) && !value.contains(":::"))
+    private fun isIpAddress(value: String): Boolean = isIpv4(value) || isIpv6(value)
+
+    private fun isIpv6(value: String): Boolean {
+        if (!value.contains(':') || value.contains('%') || !value.matches(Regex("(?i)^[0-9a-f:.]+$"))) return false
+        if (value.count { it == ':' } < 2 || value.contains(":::")) return false
+        val compressed = value.contains("::")
+        if (compressed && value.indexOf("::") != value.lastIndexOf("::")) return false
+        val halves = if (compressed) value.split("::", limit = 2) else listOf(value, "")
+        fun countGroups(part: String): Int {
+            if (part.isEmpty()) return 0
+            val segments = part.split(':')
+            var count = 0
+            for ((index, segment) in segments.withIndex()) {
+                if (segment.isEmpty()) return -1
+                if (segment.contains('.')) {
+                    if (index != segments.lastIndex || !isIpv4(segment)) return -1
+                    count += 2
+                } else {
+                    if (segment.length !in 1..4) return -1
+                    count++
+                }
+            }
+            return count
+        }
+        val left = countGroups(halves[0])
+        val right = countGroups(halves[1])
+        if (left < 0 || right < 0) return false
+        return if (compressed) left + right < 8 else left + right == 8
+    }
 
     private fun isCidr(value: String): Boolean {
         val parts = value.split('/')
