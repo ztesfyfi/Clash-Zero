@@ -21,6 +21,8 @@ import com.github.kr328.clash.service.data.Database
 import com.github.kr328.clash.service.data.GeoRuleCatalog
 import com.github.kr328.clash.service.data.NodeGroup
 import com.github.kr328.clash.service.data.PolicyCondition
+import com.github.kr328.clash.service.data.ProxyService
+import com.github.kr328.clash.service.data.ProxyServiceRepository
 import com.github.kr328.clash.service.data.RoutingPolicy
 import com.github.kr328.clash.service.data.RuleSet
 import com.github.kr328.clash.service.data.StrategyConfigurationRepository
