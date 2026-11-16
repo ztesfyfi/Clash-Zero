@@ -16,6 +16,8 @@ import com.github.kr328.clash.service.data.Database
 import com.github.kr328.clash.service.data.ProfileNodeGroup
 import com.github.kr328.clash.service.data.ProfileNodeOverride
 import com.github.kr328.clash.service.data.ProfileNodeSettings
+import com.github.kr328.clash.service.data.NodeGroup
+import com.github.kr328.clash.service.data.NodeGroupMember
 import com.github.kr328.clash.service.util.importedDir
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
@@ -252,6 +254,134 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
+                        is ProfilesDesign.Request.CreateManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val name = it.name.trim()
+                            require(name.isNotBlank()) { "节点组名称不能为空" }
+                            require(dao.queryAll().none { group -> group.name.equals(name, true) }) { "节点组名称已存在" }
+                            val tag = it.nameTag
+                            val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
+                            if (it.mode == NodeGroup.MODE_NAME || it.mode == NodeGroup.MODE_NAME_REGION) {
+                                val sourceUuid = runCatching { UUID.fromString(tag) }.getOrNull()
+                                    ?: error("动态组必须关联一个有效订阅")
+                                require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
+                                if (it.mode == NodeGroup.MODE_NAME) {
+                                    require(it.nameKeyword == null || keyword != null) { "动态组筛选关键字不能为空" }
+                                    require(it.regionCode == null) { "普通动态组不能设置地区代码" }
+                                } else {
+                                    require(it.regionCode?.matches(Regex("^[A-Za-z]{2}$")) == true) { "请选择有效的国家/地区代码" }
+                                    require(keyword == null) { "地区动态组不能设置节点名称关键字" }
+                                }
+                            } else {
+                                require(keyword == null && it.regionCode == null) { "静态组不能设置动态筛选条件" }
+                            }
+                            dao.upsert(NodeGroup(
+                                name = name,
+                                mode = it.mode,
+                                nameTag = tag,
+                                nameKeyword = keyword,
+                                regionCode = it.regionCode?.uppercase()
+                            ))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.RenameManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            val name = it.name.trim()
+                            require(name.isNotBlank()) { "节点组名称不能为空" }
+                            require(dao.queryAll().none { group -> group.id != it.id && group.name.equals(name, true) }) { "节点组名称已存在" }
+                            dao.upsert(old.copy(name = name, updatedAt = System.currentTimeMillis()))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.UpdateManagedDynamicNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            require(old.mode == NodeGroup.MODE_NAME || old.mode == NodeGroup.MODE_NAME_REGION) { "只有动态组可以修改动态筛选条件" }
+                            val sourceUuid = runCatching { UUID.fromString(it.nameTag) }.getOrNull()
+                                ?: error("动态组必须关联一个有效订阅")
+                            require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
+                            val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
+                            if (it.mode == NodeGroup.MODE_NAME_REGION) {
+                                require(it.regionCode?.matches(Regex("^[A-Za-z]{2}$")) == true) { "请选择有效的国家/地区代码" }
+                                require(keyword == null) { "地区动态组不能设置节点名称关键字" }
+                            } else {
+                                require(it.mode == NodeGroup.MODE_NAME) { "动态组类型无效" }
+                                require(it.regionCode == null) { "普通动态组不能设置地区代码" }
+                                require(it.nameKeyword == null || keyword != null) { "筛选关键字不能为空" }
+                            }
+                            dao.upsert(old.copy(
+                                mode = it.mode,
+                                nameTag = sourceUuid.toString(),
+                                nameKeyword = keyword,
+                                regionCode = it.regionCode?.uppercase(),
+                                updatedAt = System.currentTimeMillis()
+                            ))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.EnableManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            dao.upsert(old.copy(enabled = it.enabled, updatedAt = System.currentTimeMillis()))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.DeleteManagedNodeGroup -> withContext(Dispatchers.IO) {
+                            Database.database.openNodeGroupDao().delete(it.id)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.ReplaceManagedNodeGroupMembers -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.id) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以手动编辑成员" }
+
+                            // Only treat a missing proxy as stale when its subscription
+                            // was parsed successfully. A parse failure must not erase or
+                            // misclassify existing memberships.
+                            val existing = dao.queryMembers(it.id)
+                            val availableKeys = mutableSetOf<String>()
+                            val profiles = withProfile { queryAll() }.filter { profile -> profile.imported }
+                            profiles.forEach { profile ->
+                                val parsed = runCatching {
+                                    Clash.queryProfileProxies(importedDir.resolve(profile.uuid.toString()))
+                                }
+                                parsed.onSuccess { nodes ->
+                                    nodes.forEach { node ->
+                                        availableKeys += "${profile.uuid}:${node.key}"
+                                    }
+                                }.onFailure {
+                                    existing.filter { member -> member.profileUuid == profile.uuid }
+                                        .forEach { member ->
+                                            availableKeys += "${member.profileUuid}:${member.proxyKey}"
+                                        }
+                                }
+                            }
+                            dao.replaceMembersPreservingMissing(it.id, it.members, availableKeys)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.RemoveManagedNodeGroupMember -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.groupId) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以清理成员" }
+                            dao.removeMember(it.groupId, it.profileUuid, it.proxyKey)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
+                        is ProfilesDesign.Request.SetManagedNodeMembership -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.groupId) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "动态节点组不能手动添加成员" }
+                            if (it.selected) {
+                                dao.addMember(NodeGroupMember(it.groupId, it.profileUuid, it.proxyKey, it.proxyName))
+                            } else {
+                                dao.removeMember(it.groupId, it.profileUuid, it.proxyKey)
+                            }
+                            design.fetch()
+                        }
                         ProfilesDesign.Request.Refresh -> design.fetch()
                         ProfilesDesign.Request.UpdateAll ->
                             withProfile {
@@ -309,26 +439,20 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         val settings = withContext(Dispatchers.IO) {
             val existing = dao.querySettings()
             if (existing == null || !existing.presetsInitialized) {
-                dao.insertGroups(
-                    listOf(
-                        ProfileNodeGroup("region-us", "美国", true, sortOrder = 10),
-                        ProfileNodeGroup("region-jp", "日本", true, sortOrder = 20),
-                        ProfileNodeGroup("region-sg", "新加坡", true, sortOrder = 30),
-                        ProfileNodeGroup("region-hk", "香港", true, sortOrder = 40),
-                        ProfileNodeGroup("region-tw", "台湾", true, sortOrder = 50),
-                        ProfileNodeGroup("region-kr", "韩国", true, sortOrder = 60),
-                        ProfileNodeGroup("region-gb", "英国", true, sortOrder = 70),
-                        ProfileNodeGroup("region-de", "德国", true, sortOrder = 80),
-                        ProfileNodeGroup("region-other", "其他", true, sortOrder = 90),
-                    )
-                )
                 val initialized = (existing ?: ProfileNodeSettings()).copy(presetsInitialized = true)
                 dao.upsertSettings(initialized)
                 initialized
             } else existing
         }
-        val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
-        val groupById = groups.associateBy { it.id }
+        val managedDao = Database.database.openNodeGroupDao()
+        val managedGroups = withContext(Dispatchers.IO) { managedDao.queryAll() }
+        val managedMembers = withContext(Dispatchers.IO) {
+            managedGroups.associate { group -> group.id to managedDao.queryMembers(group.id) }
+        }
+        val nodeGroupNames = managedMembers.flatMap { (groupId, members) ->
+            val groupName = managedGroups.firstOrNull { it.id == groupId }?.name ?: return@flatMap emptyList()
+            members.map { member -> "${member.profileUuid}:${member.proxyKey}" to groupName }
+        }.groupBy({ it.first }, { it.second })
         val nodeErrors = mutableMapOf<UUID, String>()
         val nodeMap = withContext(Dispatchers.IO) {
             profiles.filter { it.imported }.associate { profile ->
@@ -342,7 +466,6 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                 val overrides = dao.queryOverrides(profile.uuid).associateBy { it.nodeKey }
                 profile.uuid to rawNodes.map { node ->
                     val override = overrides[node.key]
-                    val group = override?.groupId?.let(groupById::get)
                     val delayMs = override?.delayMs
                     val testedAt = override?.testedAt
                     val goodThreshold = settings.goodThresholdMs
@@ -352,8 +475,6 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         originalName = node.name,
                         displayName = override?.customName?.takeIf { it.isNotBlank() } ?: node.name,
                         type = node.type,
-                        groupId = group?.id,
-                        groupName = group?.name,
                         delayText = when {
                             delayMs != null -> "$delayMs ms"
                             testedAt != null -> override?.testError ?: "测速失败"
@@ -370,11 +491,15 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         },
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
                         exitIpText = override?.exitIp ?: "未查询",
+                        exitCountryCode = override?.exitCountry,
+                        exitLookupVerified = override?.exitIp?.isNotBlank() == true &&
+                            override.ipCheckedAt != null && override.ipCheckError.isNullOrBlank(),
                         exitLocationText = listOfNotNull(override?.exitCountry, override?.exitRegion, override?.exitCity)
                             .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "归属地未知" },
                         ipCheckedAtText = override?.ipCheckedAt?.let {
                             android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString()
                         } ?: "从未查询",
+                        groupNamesText = (nodeGroupNames["${profile.uuid}:${node.key}"].orEmpty() + managedGroups.filter { group -> group.mode == NodeGroup.MODE_NAME && group.nameTag == profile.uuid.toString() && (group.nameKeyword.isNullOrBlank() || node.name.contains(group.nameKeyword, ignoreCase = true)) }.map { it.name }).distinct().joinToString("、").ifBlank { "未加入节点组" },
                     )
                 }
             }
@@ -382,9 +507,11 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         patchProfiles(
             profiles,
             nodeMap,
-            groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) },
+            emptyList(),
             nodeErrors,
-            ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs)
+            ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs),
+            managedGroups,
+            managedMembers
         )
     }
 

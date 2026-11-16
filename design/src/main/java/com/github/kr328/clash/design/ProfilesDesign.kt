@@ -23,6 +23,9 @@ import com.github.kr328.clash.design.dialog.AppBottomSheetDialog
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.design.util.*
 import com.github.kr328.clash.service.model.Profile
+import com.github.kr328.clash.service.data.NodeGroup
+import com.github.kr328.clash.service.data.NodeGroupMember
+import com.github.kr328.clash.service.data.NodeGroupMatcher
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -46,6 +49,14 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class CreateNodeGroup(val name: String) : Request()
         data class DeleteNodeGroup(val id: String) : Request()
         data class EnableNodeGroup(val id: String, val enabled: Boolean) : Request()
+        data class CreateManagedNodeGroup(val name: String, val mode: String, val nameTag: String?, val nameKeyword: String? = null, val regionCode: String? = null) : Request()
+        data class RenameManagedNodeGroup(val id: String, val name: String) : Request()
+        data class UpdateManagedDynamicNodeGroup(val id: String, val nameTag: String, val nameKeyword: String?, val mode: String = NodeGroup.MODE_NAME, val regionCode: String? = null) : Request()
+        data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
+        data class DeleteManagedNodeGroup(val id: String) : Request()
+        data class ReplaceManagedNodeGroupMembers(val id: String, val members: List<NodeGroupMember>) : Request()
+        data class RemoveManagedNodeGroupMember(val groupId: String, val profileUuid: java.util.UUID, val proxyKey: String) : Request()
+        data class SetManagedNodeMembership(val groupId: String, val profileUuid: java.util.UUID, val proxyKey: String, val proxyName: String, val selected: Boolean) : Request()
         object Refresh : Request()
         object Create : Request()
         data class Active(val profile: Profile) : Request()
@@ -59,6 +70,11 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     private val binding = DesignProfilesBinding
         .inflate(context.layoutInflater, context.root, false)
     private var nodeGroups: List<ProfileNodeGroupItem> = emptyList()
+    private var managedNodeGroups: List<NodeGroup> = emptyList()
+    private var managedNodeMembers: Map<String, List<NodeGroupMember>> = emptyMap()
+    private var currentProfiles: List<Profile> = emptyList()
+    private var currentNodes: Map<java.util.UUID, List<ProfileNodeItem>> = emptyMap()
+    private var currentNodeErrors: Map<java.util.UUID, String> = emptyMap()
     private var nodeSettings = ProfileNodeSettingsItem()
     private val adapter = ProfileAdapter(
         context, this::showMenu, this::showNodeDetails,
@@ -82,7 +98,14 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         groups: List<ProfileNodeGroupItem> = emptyList(),
         errors: Map<java.util.UUID, String> = emptyMap(),
         settings: ProfileNodeSettingsItem = ProfileNodeSettingsItem(),
+        managedGroups: List<NodeGroup> = emptyList(),
+        managedMembers: Map<String, List<NodeGroupMember>> = emptyMap(),
     ) {
+        currentProfiles = profiles
+        currentNodes = nodes
+        currentNodeErrors = errors
+        managedNodeGroups = managedGroups
+        managedNodeMembers = managedMembers
         nodeGroups = groups
         nodeSettings = settings
         adapter.setNodes(nodes, errors)
@@ -264,46 +287,263 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
     }
 
     private fun showNodeGroupPicker(profile: Profile, node: ProfileNodeItem) {
-        val enabled = nodeGroups.filter { it.enabled }
-        val labels = listOf("不分组") + enabled.map { it.name }
-        MaterialAlertDialogBuilder(context)
-            .setTitle("选择节点分组")
-            .setItems(labels.toTypedArray()) { _, which ->
-                requests.trySend(Request.SetNodeGroup(profile, node, if (which == 0) null else enabled[which - 1].id))
+        val groups = managedNodeGroups.filter { it.enabled && it.mode == NodeGroup.MODE_STATIC }
+        if (groups.isEmpty()) {
+            MaterialAlertDialogBuilder(context).setTitle("节点组")
+                .setMessage("还没有静态节点组。先创建节点组，再把节点加入一个或多个组。")
+                .setPositiveButton("管理节点组") { _, _ -> requests.trySend(Request.ManageGroups) }
+                .setNegativeButton(R.string.close, null).show()
+            return
+        }
+        val checked = BooleanArray(groups.size) { index ->
+            managedNodeMembers[groups[index].id].orEmpty().any {
+                it.profileUuid == profile.uuid && it.proxyKey == node.key
             }
-            .setNeutralButton("分组管理") { _, _ -> requests.trySend(Request.ManageGroups) }
-            .show()
+        }
+        MaterialAlertDialogBuilder(context).setTitle("选择节点所属的组（可多选）")
+            .setMultiChoiceItems(groups.map { it.name }.toTypedArray(), checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton("管理节点组") { _, _ -> requests.trySend(Request.ManageGroups) }
+            .setPositiveButton("保存") { _, _ ->
+                groups.forEachIndexed { index, group ->
+                    requests.trySend(Request.SetManagedNodeMembership(
+                        group.id, profile.uuid, node.key, node.originalName, checked[index]
+                    ))
+                }
+            }.show()
     }
 
     fun showNodeGroupManager() {
-        val groups = nodeGroups
-        val labels = groups.map { "${if (it.enabled) "✓" else "○"} ${it.name}${if (it.isPreset) "（预设）" else ""}" }.toTypedArray()
-        MaterialAlertDialogBuilder(context)
-            .setTitle("节点分组管理")
-            .setItems(labels) { _, which ->
-                val group = groups[which]
-                MaterialAlertDialogBuilder(context)
-                    .setTitle(group.name)
-                    .setItems(arrayOf(if (group.enabled) "停用分组" else "启用分组", "删除分组")) { _, action ->
-                        if (action == 0) {
-                            requests.trySend(Request.EnableNodeGroup(group.id, !group.enabled))
-                        } else {
-                            MaterialAlertDialogBuilder(context)
-                                .setTitle("删除分组")
-                                .setMessage("删除“${group.name}”后，属于该分组的节点将变为未分组。")
-                                .setNegativeButton(R.string.cancel, null)
-                                .setPositiveButton(R.string.delete) { _, _ ->
-                                    requests.trySend(Request.DeleteNodeGroup(group.id))
-                                }
-                                .show()
-                        }
-                    }
-                    .show()
+        val groups = managedNodeGroups
+        val labels = groups.map { group ->
+            val mode = when (group.mode) {
+                NodeGroup.MODE_STATIC -> "静态组"
+                NodeGroup.MODE_NAME_REGION -> "地区动态组"
+                else -> if (group.nameKeyword.isNullOrBlank()) "订阅动态组" else "关键字动态组"
             }
-            .setPositiveButton("新建分组") { _, _ -> showCreateNodeGroup() }
-            .setNeutralButton("测速阈值") { _, _ -> showDelayThresholds() }
+            val count = managedNodeMembers[group.id].orEmpty().size
+            val sourceProfile = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }
+            val source = sourceProfile?.name ?: "关联订阅不可用"
+            val filter = if (group.mode == NodeGroup.MODE_NAME_REGION) {
+                " · 地区：${group.regionCode ?: "未设置"}"
+            } else {
+                group.nameKeyword?.takeIf { it.isNotBlank() }?.let { " · 包含：$it" }.orEmpty()
+            }
+            val matchedCount = sourceProfile?.let { profile ->
+                currentNodes[profile.uuid].orEmpty().count { node ->
+                    if (group.mode == NodeGroup.MODE_NAME_REGION) {
+                        node.exitLookupVerified && node.exitCountryCode.equals(group.regionCode, ignoreCase = true)
+                    } else {
+                        group.nameKeyword.isNullOrBlank() || node.originalName.contains(group.nameKeyword, ignoreCase = true)
+                    }
+                }
+            }
+            val dynamicSummary = source + filter + (matchedCount?.let { " · $it 个匹配节点" } ?: "")
+            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else dynamicSummary}"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle("节点管理 · 节点组")
+            .setItems(labels) { _, which -> showManagedNodeGroupActions(groups[which]) }
+            .setPositiveButton("新建节点组") { _, _ -> showCreateManagedNodeGroup() }
             .setNegativeButton(R.string.close, null)
             .show()
+    }
+
+    private fun showManagedNodeGroupActions(group: NodeGroup) {
+        val actions = mutableListOf<String>()
+        if (group.mode == NodeGroup.MODE_STATIC) actions.add("管理组内节点")
+        if (group.mode == NodeGroup.MODE_NAME || group.mode == NodeGroup.MODE_NAME_REGION) actions.add("编辑动态筛选")
+        actions.add("重命名")
+        actions.add(if (group.enabled) "停用" else "启用")
+        actions.add("删除")
+        MaterialAlertDialogBuilder(context).setTitle(group.name)
+            .setItems(actions.toTypedArray()) { _, which ->
+                when (actions[which]) {
+                    "管理组内节点" -> showManagedNodeMembers(group)
+                    "编辑动态筛选" -> showEditManagedDynamicGroup(group)
+                    "重命名" -> {
+                        val input = EditText(context).apply { setSingleLine(true); setText(group.name) }
+                        MaterialAlertDialogBuilder(context).setTitle("重命名节点组").setView(input)
+                            .setNegativeButton(R.string.cancel, null)
+                            .setPositiveButton(R.string.ok) { _, _ ->
+                                requests.trySend(Request.RenameManagedNodeGroup(group.id, input.text.toString().trim()))
+                            }.show()
+                    }
+                    "停用" -> requests.trySend(Request.EnableManagedNodeGroup(group.id, false))
+                    "启用" -> requests.trySend(Request.EnableManagedNodeGroup(group.id, true))
+                    "删除" -> MaterialAlertDialogBuilder(context).setTitle("删除节点组")
+                        .setMessage("删除“${group.name}”及其成员关系？不会删除订阅或原始节点。")
+                        .setNegativeButton(R.string.cancel, null)
+                        .setPositiveButton(R.string.delete) { _, _ -> requests.trySend(Request.DeleteManagedNodeGroup(group.id)) }
+                        .show()
+                }
+            }.show()
+    }
+
+    private fun showCreateManagedNodeGroup() {
+        val input = EditText(context).apply { setSingleLine(true); hint = "节点组名称" }
+        MaterialAlertDialogBuilder(context).setTitle("新建节点组").setView(input)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    launch { showToast("节点组名称不能为空。", ToastDuration.Long) }
+                } else {
+                    MaterialAlertDialogBuilder(context).setTitle("选择节点组类型")
+                        .setItems(arrayOf(
+                            "静态组（手动选择节点）",
+                            "动态组（关联整个订阅）",
+                            "动态组（按节点名称关键字筛选）",
+                            "动态组（按真实出口 IP 国家/地区筛选）"
+                        )) { _, mode ->
+                            if (mode == 0) {
+                                requests.trySend(Request.CreateManagedNodeGroup(name, NodeGroup.MODE_STATIC, null))
+                            } else {
+                                val sources = currentProfiles.filter { it.imported }
+                                if (sources.isEmpty()) {
+                                    launch { showToast("没有可关联的订阅，请先导入订阅。", ToastDuration.Long) }
+                                } else {
+                                    MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
+                                        .setItems(sources.map { it.name }.toTypedArray()) { _, selected ->
+                                            val sourceId = sources[selected].uuid.toString()
+                                            if (mode == 1) {
+                                                requests.trySend(Request.CreateManagedNodeGroup(
+                                                    name, NodeGroup.MODE_NAME, sourceId
+                                                ))
+                                            } else if (mode == 3) {
+                                                showRegionCodePicker { code ->
+                                                    requests.trySend(Request.CreateManagedNodeGroup(
+                                                        name, NodeGroup.MODE_NAME_REGION, sourceId, regionCode = code
+                                                    ))
+                                                }
+                                            } else {
+                                                val keywordInput = EditText(context).apply {
+                                                    setSingleLine(true)
+                                                    hint = "输入节点名称关键字"
+                                                }
+                                                MaterialAlertDialogBuilder(context)
+                                                    .setTitle("设置节点筛选关键字")
+                                                    .setMessage("只匹配该订阅中原始节点名称包含此关键字的节点。")
+                                                    .setView(keywordInput)
+                                                    .setNegativeButton(R.string.cancel, null)
+                                                    .setPositiveButton(R.string.ok) { _, _ ->
+                                                        val keyword = keywordInput.text.toString().trim()
+                                                        if (keyword.isBlank()) {
+                                                            launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
+                                                        } else {
+                                                            requests.trySend(Request.CreateManagedNodeGroup(
+                                                                name, NodeGroup.MODE_NAME, sourceId, keyword
+                                                            ))
+                                                        }
+                                                    }.show()
+                                            }
+                                        }.show()
+                                }
+                            }
+                        }.show()
+                }
+            }.show()
+    }
+
+    private fun showEditManagedDynamicGroup(group: NodeGroup) {
+        val sources = currentProfiles.filter { it.imported }
+        if (sources.isEmpty()) {
+            launch { showToast("没有可关联的订阅，请先导入订阅。", ToastDuration.Long) }
+            return
+        }
+        var selectedIndex = sources.indexOfFirst { it.uuid.toString() == group.nameTag }.coerceAtLeast(0)
+        MaterialAlertDialogBuilder(context).setTitle("选择关联订阅")
+            .setSingleChoiceItems(sources.map { it.name }.toTypedArray(), selectedIndex) { _, which ->
+                selectedIndex = which
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val sourceId = sources.getOrNull(selectedIndex)?.uuid?.toString() ?: return@setPositiveButton
+                MaterialAlertDialogBuilder(context).setTitle("动态组筛选方式")
+                    .setItems(arrayOf("关联整个订阅", "按节点名称关键字筛选", "按真实出口 IP 国家/地区筛选")) { _, mode ->
+                        when (mode) {
+                            0 -> requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, null))
+                            1 -> {
+                                val keywordInput = EditText(context).apply {
+                                    setSingleLine(true)
+                                    hint = "输入节点名称关键字"
+                                    setText(group.nameKeyword.orEmpty())
+                                }
+                                MaterialAlertDialogBuilder(context).setTitle("设置节点筛选关键字")
+                                    .setView(keywordInput)
+                                    .setNegativeButton(R.string.cancel, null)
+                                    .setPositiveButton(R.string.ok) { _, _ ->
+                                        val keyword = keywordInput.text.toString().trim()
+                                        if (keyword.isBlank()) {
+                                            launch { showToast("筛选关键字不能为空。", ToastDuration.Long) }
+                                        } else {
+                                            requests.trySend(Request.UpdateManagedDynamicNodeGroup(group.id, sourceId, keyword))
+                                        }
+                                    }.show()
+                            }
+                            2 -> showRegionCodePicker { code ->
+                                requests.trySend(Request.UpdateManagedDynamicNodeGroup(
+                                    group.id, sourceId, null, NodeGroup.MODE_NAME_REGION, code
+                                ))
+                            }
+                        }
+                    }.show()
+            }.show()
+    }
+
+    private fun showRegionCodePicker(onSelected: (String) -> Unit) {
+        val regions = listOf(
+            "美国" to "US", "日本" to "JP", "新加坡" to "SG", "香港" to "HK",
+            "台湾" to "TW", "韩国" to "KR", "英国" to "GB", "德国" to "DE",
+            "法国" to "FR", "加拿大" to "CA", "澳大利亚" to "AU", "荷兰" to "NL"
+        )
+        MaterialAlertDialogBuilder(context).setTitle("选择出口国家/地区")
+            .setItems(regions.map { "${it.first} (${it.second})" }.toTypedArray()) { _, which ->
+                onSelected(regions[which].second)
+            }.show()
+    }
+
+    private fun showManagedNodeMembers(group: NodeGroup) {
+        val options = currentProfiles.filter { it.imported }.flatMap { profile ->
+            currentNodes[profile.uuid].orEmpty().map { node ->
+                Triple(profile, node, NodeGroupMember(group.id, profile.uuid, node.key, node.originalName))
+            }
+        }
+        val existing = managedNodeMembers[group.id].orEmpty()
+        val liveKeys = options.map { "${it.third.profileUuid}:${it.third.proxyKey}" }.toSet()
+        val stale = existing.filter {
+            it.profileUuid !in currentNodeErrors && "${it.profileUuid}:${it.proxyKey}" !in liveKeys
+        }
+        if (options.isEmpty() && stale.isEmpty()) {
+            launch { showToast("当前没有可管理的订阅节点，请先更新订阅。", ToastDuration.Long) }
+            return
+        }
+        val selected = existing.map { "${it.profileUuid}:${it.proxyKey}" }.toSet()
+        val checked = BooleanArray(options.size) { index ->
+            val member = options[index].third
+            "${member.profileUuid}:${member.proxyKey}" in selected
+        }
+        val labels = options.map { (profile, node, _) -> "[${profile.name}] ${node.displayName}（${node.type}）" }.toTypedArray()
+        val builder = MaterialAlertDialogBuilder(context)
+            .setTitle("选择“${group.name}”的节点")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton("保存成员") { _, _ ->
+                val members = options.mapIndexedNotNull { index, option -> if (checked[index]) option.third else null }
+                requests.trySend(Request.ReplaceManagedNodeGroupMembers(group.id, members))
+            }
+        if (stale.isNotEmpty()) {
+            builder.setNeutralButton("清理失效成员（${stale.size}）") { _, _ ->
+                stale.forEach { member ->
+                    requests.trySend(Request.RemoveManagedNodeGroupMember(
+                        group.id, member.profileUuid, member.proxyKey
+                    ))
+                }
+            }
+        }
+        builder.show()
     }
 
     private fun showDelayThresholds() {

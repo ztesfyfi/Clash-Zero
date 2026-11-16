@@ -37,13 +37,40 @@ object StrategyConfigCompiler {
                 .map { it.proxyName }
                 .distinct()
         }
+        // Only successful, timestamped lookups for this exact subscription qualify.
+        val verifiedOverrides = database.openProfileNodeDao().queryOverrides(profileUuid)
+            .filter {
+                !it.exitIp.isNullOrBlank() && it.ipCheckedAt != null &&
+                    it.ipCheckError.isNullOrBlank() && it.exitCountry?.matches(Regex("^[A-Za-z]{2}$")) == true
+            }
+        val regionMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_NAME_REGION }.associate { group ->
+            group.id to verifiedOverrides
+                .filter { it.exitCountry.equals(group.regionCode, ignoreCase = true) }
+                .map { it.originalName }
+                .distinct()
+        }
+        val referencedNodeGroupIds = strategyMembers.values.flatten()
+            .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+            .map { it.memberId }
+            .toSet()
+        nodeGroups.filter {
+            it.id in referencedNodeGroupIds &&
+                it.mode == NodeGroup.MODE_NAME_REGION &&
+                it.nameTag == profileUuid.toString()
+        }.forEach { group ->
+            require(regionMembers[group.id].orEmpty().isNotEmpty()) {
+                "地区动态组“${group.name}”没有可用节点：请先完成真实出口 IP 查询，且国家代码必须为 ISO 两位代码"
+            }
+        }
         val nodeNames = nodeGroups.filter { group ->
             group.id in strategyMembers.values.flatten()
                 .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
                 .map { it.memberId } &&
                 when (group.mode) {
                     NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
-                    NodeGroup.MODE_NAME -> !group.nameTag.isNullOrBlank()
+                    NodeGroup.MODE_NAME -> group.nameTag == profileUuid.toString()
+                    NodeGroup.MODE_NAME_REGION -> group.nameTag == profileUuid.toString() &&
+                        regionMembers[group.id].orEmpty().isNotEmpty()
                     else -> false
                 }
         }.associate { it.id to nodeGroupName(it.id) }
@@ -77,7 +104,16 @@ object StrategyConfigCompiler {
                 NodeGroup.MODE_STATIC -> json.put("proxies", JSONArray(staticMembers[group.id].orEmpty()))
                 NodeGroup.MODE_NAME -> {
                     json.put("include-all", true)
-                        .put("filter", "(?i)^" + Regex.escape(group.nameTag.orEmpty()))
+                    group.nameKeyword?.takeIf { it.isNotBlank() }?.let { keyword ->
+                        json.put("filter", "(?i).*" + Regex.escape(keyword) + ".*")
+                    }
+                }
+                NodeGroup.MODE_NAME_REGION -> {
+                    val members = regionMembers[group.id].orEmpty()
+                    require(members.isNotEmpty()) {
+                        "地区动态组“${group.name}”没有已验证且匹配地区的节点；请先查询节点真实出口 IP"
+                    }
+                    json.put("proxies", JSONArray(members))
                 }
             }
             proxyGroups.put(json)

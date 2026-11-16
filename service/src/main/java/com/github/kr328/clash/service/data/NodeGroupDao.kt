@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.TypeConverters
 import androidx.room.Update
+import androidx.room.Transaction
 import java.util.UUID
 
 @Dao
@@ -34,6 +35,35 @@ interface NodeGroupDao {
 
     @Query("DELETE FROM node_group_members WHERE groupId = :groupId")
     suspend fun clearMembers(groupId: String)
+
+    @Transaction
+    suspend fun replaceMembers(groupId: String, members: List<NodeGroupMember>) {
+        clearMembers(groupId)
+        members.distinctBy { "${it.profileUuid}:${it.proxyKey}" }
+            .forEach { addMember(it.copy(groupId = groupId)) }
+    }
+
+    /**
+     * Replaces the visible selection while retaining members that disappeared
+     * from a successfully parsed subscription. Those stale entries can then be
+     * shown and removed explicitly instead of being silently discarded.
+     *
+     * availableKeys contains profileUuid:proxyKey pairs from subscriptions
+     * whose current proxy list was parsed successfully.
+     */
+    @Transaction
+    suspend fun replaceMembersPreservingMissing(
+        groupId: String,
+        members: List<NodeGroupMember>,
+        availableKeys: Set<String>
+    ) {
+        val existing = queryMembers(groupId)
+        val stale = existing.filter { "${it.profileUuid}:${it.proxyKey}" !in availableKeys }
+        clearMembers(groupId)
+        (members + stale)
+            .distinctBy { "${it.profileUuid}:${it.proxyKey}" }
+            .forEach { addMember(it.copy(groupId = groupId)) }
+    }
 
     @Query("DELETE FROM node_group_members WHERE profileUuid = :profileUuid")
     suspend fun removeMembersForProfile(profileUuid: UUID)
