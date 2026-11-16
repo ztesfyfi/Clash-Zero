@@ -31,6 +31,12 @@ data class ProfileNodeOverride(
     @ColumnInfo(name = "delayMs") val delayMs: Int? = null,
     @ColumnInfo(name = "testedAt") val testedAt: Long? = null,
     @ColumnInfo(name = "testError") val testError: String? = null,
+    @ColumnInfo(name = "exitIp") val exitIp: String? = null,
+    @ColumnInfo(name = "exitCountry") val exitCountry: String? = null,
+    @ColumnInfo(name = "exitRegion") val exitRegion: String? = null,
+    @ColumnInfo(name = "exitCity") val exitCity: String? = null,
+    @ColumnInfo(name = "ipCheckedAt") val ipCheckedAt: Long? = null,
+    @ColumnInfo(name = "ipCheckError") val ipCheckError: String? = null,
 )
 
 @Entity(tableName = "profile_node_settings")
