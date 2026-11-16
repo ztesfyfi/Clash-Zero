@@ -54,7 +54,9 @@ object NodeGroupMatcher {
             NodeGroup.MODE_STATIC -> false
             NodeGroup.MODE_NAME -> {
                 val sourceProfile = group.nameTag ?: return false
-                candidate.profileUuid.equals(sourceProfile, ignoreCase = true)
+                candidate.profileUuid.equals(sourceProfile, ignoreCase = true) &&
+                    (group.nameKeyword.isNullOrBlank() ||
+                        candidate.displayName.contains(group.nameKeyword, ignoreCase = true))
             }
             NodeGroup.MODE_NAME_REGION -> {
                 val sourceProfile = group.nameTag ?: return false
