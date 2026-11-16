@@ -136,6 +136,15 @@
                     app:subtext="按域名、IP、规则集设置流量出口"
                     app:text="目标分流" />
 
+                <com.github.kr328.clash.design.view.LargeActionCard
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="@dimen/main_card_margin_vertical"
+                    android:onClick="@{() -> self.request(Request.OpenProxyServices)}"
+                    app:icon="@drawable/ic_baseline_swap_vertical_circle"
+                    app:subtext="将目标集合绑定到节点组出口"
+                    app:text="代理服务" />
+
                 <com.github.kr328.clash.design.view.LargeActionLabel
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
