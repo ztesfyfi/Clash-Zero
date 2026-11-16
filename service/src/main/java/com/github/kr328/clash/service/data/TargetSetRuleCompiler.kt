@@ -42,7 +42,7 @@ object TargetSetRuleCompiler {
         for (targetSet in enabledSets) {
             val outbound = outboundByTargetSet[targetSet.id]?.trim()
                 ?: error("目标集合“${targetSet.name}”尚未绑定代理服务")
-            require(outbound.isNotEmpty() && outbound.none { it == ',' || it == '\\n' || it == '\\r' }) {
+            require(outbound.isNotEmpty() && outbound.none { it == ',' || it == '\n' || it == '\r' }) {
                 "目标集合“${targetSet.name}”绑定的出口名称为空或包含非法分隔符"
             }
 
