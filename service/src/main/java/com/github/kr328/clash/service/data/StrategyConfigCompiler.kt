@@ -37,6 +37,18 @@ object StrategyConfigCompiler {
                 .map { it.proxyName }
                 .distinct()
         }
+        // Only successful, timestamped lookups for this exact subscription qualify.
+        val verifiedOverrides = database.openProfileNodeDao().queryOverrides(profileUuid)
+            .filter {
+                !it.exitIp.isNullOrBlank() && it.ipCheckedAt != null &&
+                    it.ipCheckError.isNullOrBlank() && !it.exitCountry.isNullOrBlank()
+            }
+        val regionMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_NAME_REGION }.associate { group ->
+            group.id to verifiedOverrides
+                .filter { it.exitCountry.equals(group.regionCode, ignoreCase = true) }
+                .map { it.originalName }
+                .distinct()
+        }
         val nodeNames = nodeGroups.filter { group ->
             group.id in strategyMembers.values.flatten()
                 .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
@@ -44,6 +56,8 @@ object StrategyConfigCompiler {
                 when (group.mode) {
                     NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
                     NodeGroup.MODE_NAME -> group.nameTag == profileUuid.toString()
+                    NodeGroup.MODE_NAME_REGION -> group.nameTag == profileUuid.toString() &&
+                        regionMembers[group.id].orEmpty().isNotEmpty()
                     else -> false
                 }
         }.associate { it.id to nodeGroupName(it.id) }
@@ -80,6 +94,13 @@ object StrategyConfigCompiler {
                     group.nameKeyword?.takeIf { it.isNotBlank() }?.let { keyword ->
                         json.put("filter", "(?i).*" + Regex.escape(keyword) + ".*")
                     }
+                }
+                NodeGroup.MODE_NAME_REGION -> {
+                    val members = regionMembers[group.id].orEmpty()
+                    require(members.isNotEmpty()) {
+                        "地区动态组“${group.name}”没有已验证且匹配地区的节点；请先查询节点真实出口 IP"
+                    }
+                    json.put("proxies", JSONArray(members))
                 }
             }
             proxyGroups.put(json)
