@@ -152,7 +152,7 @@ object StrategyConfigCompiler {
             proxyGroups.put(json)
         }
 
-        val rules = JSONArray()
+        val legacyRules = JSONArray()
         fun matcherExpression(condition: PolicyCondition): String {
             require(condition.matcherType != PolicyCondition.IP_SET &&
                 condition.matcherType != PolicyCondition.DOMAIN_SET) {
@@ -186,14 +186,15 @@ object StrategyConfigCompiler {
             }
             val expressions = conditions.map(::matcherExpression)
             if (policy.matchMode == RoutingPolicy.MATCH_ALL) {
-                rules.put("AND,((" + expressions.joinToString("),(") + "))," + target)
+                legacyRules.put("AND,((" + expressions.joinToString("),(") + "))," + target)
             } else {
-                expressions.forEach { rules.put("$it,$target") }
+                expressions.forEach { legacyRules.put("$it,$target") }
             }
         }
 
         val targetSets = database.openTargetSetDao().queryAll()
         val targetProviders = JSONObject()
+        val targetRules = JSONArray()
         if (targetSetOutboundBindings.isNotEmpty()) {
             val conditionsBySet = targetSets.associate { targetSet ->
                 targetSet.id to database.openTargetSetDao().queryConditions(targetSet.id)
@@ -209,9 +210,14 @@ object StrategyConfigCompiler {
                 targetProviders.put(key, targetOutput.providers.getJSONObject(key))
             }
             for (index in 0 until targetOutput.rules.length()) {
-                rules.put(targetOutput.rules.getString(index))
+                targetRules.put(targetOutput.rules.getString(index))
             }
         }
+
+        // New target-set routing takes precedence over legacy policies.
+        val rules = JSONArray()
+        for (index in 0 until targetRules.length()) rules.put(targetRules.getString(index))
+        for (index in 0 until legacyRules.length()) rules.put(legacyRules.getString(index))
 
         val overlay = JSONObject()
             .put("proxy-groups", proxyGroups)
