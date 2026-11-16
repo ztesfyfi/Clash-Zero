@@ -344,6 +344,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             goodThreshold != null && slowThreshold != null -> "ERROR"
                             else -> "TESTED"
                         },
+                        testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
                     )
                 }
             }
