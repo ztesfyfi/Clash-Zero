@@ -16,8 +16,8 @@ data class NodeGroupCandidate(
 
 object NodeGroupMatcher {
     /**
-     * Produces the visible subscription prefix, e.g. "[机场A]".
-     * Keeping this prefix stable lets NAME groups follow subscription updates.
+     * Creates a normalized display prefix for subscription-tagged node labels.
+     * Dynamic subscription groups now bind to the source profile UUID instead.
      */
     fun subscriptionTag(subscriptionName: String): String {
         val name = subscriptionName.trim()
@@ -26,9 +26,8 @@ object NodeGroupMatcher {
     }
 
     /**
-     * Adds a subscription tag without duplicating it when a node is imported
-     * or processed more than once. The caller must retain the original name
-     * separately so the user can restore it.
+     * Adds a display-only subscription tag without duplicating it. The caller
+     * must retain the original node name separately so it can be restored.
      */
     fun taggedNodeName(subscriptionName: String, originalNodeName: String): String {
         val tag = subscriptionTag(subscriptionName)
@@ -46,24 +45,24 @@ object NodeGroupMatcher {
     }
 
     /**
-     * STATIC membership is maintained explicitly and is never inferred here.
-     * NAME_REGION requires a verified exit-region result; unknown or failed
-     * lookups never fall back to the node name or server address.
+     * STATIC membership is maintained explicitly. NAME groups follow a source
+     * subscription by its stable profile UUID. NAME_REGION additionally requires
+     * a verified exit-region result; unknown lookups never infer a region.
      */
     fun matches(group: NodeGroup, candidate: NodeGroupCandidate): Boolean {
         return when (group.mode) {
             NodeGroup.MODE_STATIC -> false
             NodeGroup.MODE_NAME -> {
-                val tag = group.nameTag ?: return false
-                hasSubscriptionTag(candidate.displayName, tag)
+                val sourceProfile = group.nameTag ?: return false
+                candidate.profileUuid.equals(sourceProfile, ignoreCase = true)
             }
             NodeGroup.MODE_NAME_REGION -> {
-                val tag = group.nameTag ?: return false
+                val sourceProfile = group.nameTag ?: return false
                 val region = group.regionCode ?: return false
-                candidate.exitRegionVerified &&
+                candidate.profileUuid.equals(sourceProfile, ignoreCase = true) &&
+                    candidate.exitRegionVerified &&
                     !candidate.exitRegionCode.isNullOrBlank() &&
-                    candidate.exitRegionCode.equals(region, ignoreCase = true) &&
-                    hasSubscriptionTag(candidate.displayName, tag)
+                    candidate.exitRegionCode.equals(region, ignoreCase = true)
             }
             else -> false
         }

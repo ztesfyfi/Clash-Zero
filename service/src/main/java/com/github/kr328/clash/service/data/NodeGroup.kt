@@ -12,7 +12,7 @@ import java.util.UUID
  * User-defined node group.
  *
  * STATIC groups are populated manually.
- * NAME groups are populated from nodes carrying [nameTag].
+ * NAME groups include every node from the subscription whose UUID is stored in [nameTag].
  * NAME_REGION groups additionally require a verified exit region.
  */
 @Entity(
@@ -24,6 +24,7 @@ data class NodeGroup(
     @ColumnInfo(name = "id") val id: String = UUID.randomUUID().toString(),
     @ColumnInfo(name = "name") val name: String,
     @ColumnInfo(name = "mode") val mode: String,
+    /** Source subscription UUID for NAME and NAME_REGION dynamic groups. */
     @ColumnInfo(name = "nameTag") val nameTag: String? = null,
     @ColumnInfo(name = "regionCode") val regionCode: String? = null,
     @ColumnInfo(name = "iconMode", defaultValue = "'AUTO'") val iconMode: String = StrategyGroup.ICON_AUTO,

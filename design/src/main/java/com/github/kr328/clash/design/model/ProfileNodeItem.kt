@@ -13,6 +13,7 @@ data class ProfileNodeItem(
     val exitIpText: String = "未查询",
     val exitLocationText: String = "归属地未知",
     val ipCheckedAtText: String = "从未查询",
+    val groupNamesText: String = "未加入节点组",
 )
 
 data class ProfileNodeGroupItem(
