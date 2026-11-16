@@ -277,9 +277,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             val dao = Database.database.openNodeGroupDao()
                             val group = dao.queryById(it.id) ?: error("节点组不存在")
                             require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以手动编辑成员" }
-                            dao.clearMembers(it.id)
-                            it.members.distinctBy { member -> "${member.profileUuid}:${member.proxyKey}" }
-                                .forEach { member -> dao.addMember(member.copy(groupId = it.id)) }
+                            dao.replaceMembers(it.id, it.members)
                             design.fetch()
                             design.showNodeGroupManager()
                         }
