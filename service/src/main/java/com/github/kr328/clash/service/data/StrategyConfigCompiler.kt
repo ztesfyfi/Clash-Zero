@@ -43,7 +43,7 @@ object StrategyConfigCompiler {
                 .map { it.memberId } &&
                 when (group.mode) {
                     NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
-                    NodeGroup.MODE_NAME -> !group.nameTag.isNullOrBlank()
+                    NodeGroup.MODE_NAME -> group.nameTag == profileUuid.toString()
                     else -> false
                 }
         }.associate { it.id to nodeGroupName(it.id) }
@@ -75,10 +75,7 @@ object StrategyConfigCompiler {
                 .put("type", "select")
             when (group.mode) {
                 NodeGroup.MODE_STATIC -> json.put("proxies", JSONArray(staticMembers[group.id].orEmpty()))
-                NodeGroup.MODE_NAME -> {
-                    json.put("include-all", true)
-                        .put("filter", "(?i)^" + Regex.escape(group.nameTag.orEmpty()))
-                }
+                NodeGroup.MODE_NAME -> json.put("include-all", true)
             }
             proxyGroups.put(json)
         }
