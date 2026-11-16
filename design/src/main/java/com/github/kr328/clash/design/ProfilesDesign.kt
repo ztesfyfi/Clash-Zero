@@ -253,7 +253,9 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
             .setPositiveButton(R.string.ok) { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isBlank()) {
-                    showToast("节点名称不能为空；如需恢复原名，请使用“恢复原始名称”。", ToastDuration.Long)
+                    launch {
+                        showToast("节点名称不能为空；如需恢复原名，请使用“恢复原始名称”。", ToastDuration.Long)
+                    }
                 } else {
                     requests.trySend(Request.RenameNode(profile, node, name))
                 }
