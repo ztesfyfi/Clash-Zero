@@ -316,9 +316,16 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         val labels = groups.map { group ->
             val mode = if (group.mode == NodeGroup.MODE_STATIC) "静态组" else if (group.nameKeyword.isNullOrBlank()) "订阅动态组" else "关键字动态组"
             val count = managedNodeMembers[group.id].orEmpty().size
-            val source = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }?.name ?: "关联订阅不可用"
+            val sourceProfile = currentProfiles.firstOrNull { it.uuid.toString() == group.nameTag }
+            val source = sourceProfile?.name ?: "关联订阅不可用"
             val filter = group.nameKeyword?.takeIf { it.isNotBlank() }?.let { " · 包含：$it" }.orEmpty()
-            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else source + filter}"
+            val matchedCount = sourceProfile?.let { profile ->
+                currentNodes[profile.uuid].orEmpty().count { node ->
+                    group.nameKeyword.isNullOrBlank() || node.originalName.contains(group.nameKeyword, ignoreCase = true)
+                }
+            }
+            val dynamicSummary = source + filter + (matchedCount?.let { " · $it 个匹配节点" } ?: "")
+            "${if (group.enabled) "✓" else "○"} ${group.name} · $mode · ${if (group.mode == NodeGroup.MODE_STATIC) "$count 个成员" else dynamicSummary}"
         }.toTypedArray()
         MaterialAlertDialogBuilder(context)
             .setTitle("节点管理 · 节点组")
