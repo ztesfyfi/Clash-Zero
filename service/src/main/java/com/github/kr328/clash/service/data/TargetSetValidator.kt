@@ -56,7 +56,7 @@ object TargetSetValidator {
                     if (set.kind != expected) return "规则集类型与匹配类型不一致：${set.name}"
                     if (!set.enabled) return "引用的规则集已停用：${set.name}"
                     if (set.updateInterval < 3600000L) return "规则集更新间隔不能少于 1 小时：${set.name}"
-                    if (set.format !in setOf(RuleSet.FORMAT_MRS, RuleSet.FORMAT_CLASSICAL, RuleSet.FORMAT_TEXT)) {
+                    if (set.format !in setOf(RuleSet.FORMAT_MRS, RuleSet.FORMAT_TEXT)) {
                         return "规则集格式不受支持：${set.name}"
                     }
                     when (set.sourceType) {
