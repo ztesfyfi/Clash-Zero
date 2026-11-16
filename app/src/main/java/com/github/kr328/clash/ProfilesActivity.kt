@@ -337,7 +337,29 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             val dao = Database.database.openNodeGroupDao()
                             val group = dao.queryById(it.id) ?: error("节点组不存在")
                             require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以手动编辑成员" }
-                            dao.replaceMembers(it.id, it.members)
+
+                            // Only treat a missing proxy as stale when its subscription
+                            // was parsed successfully. A parse failure must not erase or
+                            // misclassify existing memberships.
+                            val existing = dao.queryMembers(it.id)
+                            val availableKeys = mutableSetOf<String>()
+                            val profiles = withProfile { queryAll() }.filter { profile -> profile.imported }
+                            profiles.forEach { profile ->
+                                val parsed = runCatching {
+                                    Clash.queryProfileProxies(importedDir.resolve(profile.uuid.toString()))
+                                }
+                                parsed.onSuccess { nodes ->
+                                    nodes.forEach { node ->
+                                        availableKeys += "${profile.uuid}:${node.key}"
+                                    }
+                                }.onFailure {
+                                    existing.filter { member -> member.profileUuid == profile.uuid }
+                                        .forEach { member ->
+                                            availableKeys += "${member.profileUuid}:${member.proxyKey}"
+                                        }
+                                }
+                            }
+                            dao.replaceMembersPreservingMissing(it.id, it.members, availableKeys)
                             design.fetch()
                             design.showNodeGroupManager()
                         }
