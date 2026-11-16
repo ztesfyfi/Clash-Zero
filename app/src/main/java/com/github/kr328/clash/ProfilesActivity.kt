@@ -18,7 +18,6 @@ import com.github.kr328.clash.service.data.ProfileNodeOverride
 import com.github.kr328.clash.service.data.ProfileNodeSettings
 import com.github.kr328.clash.service.data.NodeGroup
 import com.github.kr328.clash.service.data.NodeGroupMember
-import com.github.kr328.clash.service.data.NodeGroupMatcher
 import com.github.kr328.clash.service.util.importedDir
 import com.github.kr328.clash.design.ui.ToastDuration
 import com.github.kr328.clash.service.model.Profile
@@ -242,8 +241,12 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             val name = it.name.trim()
                             require(name.isNotBlank()) { "节点组名称不能为空" }
                             require(dao.queryAll().none { group -> group.name.equals(name, true) }) { "节点组名称已存在" }
-                            val tag = it.nameTag?.let(NodeGroupMatcher::subscriptionTag)
-                            if (it.mode == NodeGroup.MODE_NAME) require(!tag.isNullOrBlank()) { "动态组必须关联订阅名称" }
+                            val tag = it.nameTag
+                            if (it.mode == NodeGroup.MODE_NAME) {
+                                val sourceUuid = runCatching { UUID.fromString(tag) }.getOrNull()
+                                    ?: error("动态组必须关联一个有效订阅")
+                                require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
+                            }
                             dao.upsert(NodeGroup(name = name, mode = it.mode, nameTag = tag))
                             design.fetch()
                             design.showNodeGroupManager()
