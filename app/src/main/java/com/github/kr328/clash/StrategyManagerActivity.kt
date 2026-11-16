@@ -137,10 +137,16 @@ class StrategyManagerActivity : AppCompatActivity() {
                     }
                     else -> {
                         val targetSets = database.openTargetSetDao().queryAll()
+                        val ruleSets = database.openRuleSetDao().queryAll()
                         if (targetSets.isEmpty()) emptyHint("还没有目标集合，点击右上角新建。")
                         targetSets.forEach { targetSet ->
                             val conditions = database.openTargetSetDao().queryConditions(targetSet.id)
-                            val matcherSummary = conditions.joinToString("、") { "${it.matcherType}: ${it.matcherValue}" }
+                            val matcherSummary = conditions.joinToString("、") { condition ->
+                                val ruleSetName = if (condition.matcherType == PolicyCondition.IP_SET || condition.matcherType == PolicyCondition.DOMAIN_SET) {
+                                    ruleSets.firstOrNull { it.id == condition.matcherValue }?.name ?: "规则集缺失"
+                                } else condition.matcherValue
+                                "${condition.matcherType}: $ruleSetName"
+                            }
                             val mode = if (targetSet.matchMode == TargetSet.MATCH_ALL) "全部匹配（AND）" else "任一匹配（OR）"
                             addRow(targetSet.name, "$mode · ${conditions.size} 条规则 · ${matcherSummary.ifBlank { "尚未配置规则" }}", targetSet.enabled) {
                                 showTargetSetActions(targetSet)
@@ -161,14 +167,14 @@ class StrategyManagerActivity : AppCompatActivity() {
                     0 -> showTargetSetEditor(targetSet)
                     1 -> scope.launch {
                         database.openTargetSetDao().setEnabled(targetSet.id, !targetSet.enabled)
-                        refresh(apply = true)
+                        refresh()
                     }
                     2 -> AlertDialog.Builder(this).setMessage("确定删除目标集合“${targetSet.name}”？")
                         .setNegativeButton("取消", null)
                         .setPositiveButton("删除") { _, _ ->
                             scope.launch {
                                 database.openTargetSetDao().delete(targetSet.id)
-                                refresh(apply = true)
+                                refresh()
                             }
                         }.show()
                 }
@@ -179,6 +185,7 @@ class StrategyManagerActivity : AppCompatActivity() {
         scope.launch {
             val dao = database.openTargetSetDao()
             val conditions = dao.queryConditions(existing?.id.orEmpty()).toMutableList()
+            val ruleSets = database.openRuleSetDao().queryAll()
             val name = edit("目标集合名称").apply { setText(existing?.name.orEmpty()) }
             val matchMode = spinner(listOf("任一规则匹配（OR）", "全部规则匹配（AND）")).apply {
                 setSelection(if (existing?.matchMode == TargetSet.MATCH_ALL) 1 else 0)
@@ -201,7 +208,9 @@ class StrategyManagerActivity : AppCompatActivity() {
                         gravity = Gravity.CENTER_VERTICAL
                     }
                     row.addView(TextView(this@StrategyManagerActivity).apply {
-                        text = "${condition.matcherType} · ${condition.matcherValue}"
+                        text = "${condition.matcherType} · " + if (condition.matcherType == PolicyCondition.IP_SET || condition.matcherType == PolicyCondition.DOMAIN_SET) {
+                            ruleSets.firstOrNull { it.id == condition.matcherValue }?.name ?: "规则集缺失"
+                        } else condition.matcherValue
                         textSize = 13f
                     }, LinearLayout.LayoutParams(0, -2, 1f))
                     row.addView(Button(this@StrategyManagerActivity).apply {
@@ -265,7 +274,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                         runCatching { TargetSetRepository(database).save(saved, normalized) }
                             .onSuccess {
                                 dialog.dismiss()
-                                refresh(apply = true)
+                                refresh()
                             }
                             .onFailure { toast("保存失败：${it.message}") }
                     }
