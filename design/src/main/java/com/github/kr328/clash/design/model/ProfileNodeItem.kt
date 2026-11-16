@@ -9,6 +9,7 @@ data class ProfileNodeItem(
     val groupName: String? = null,
     val delayText: String = "未测试",
     val delayState: String = "UNTESTED",
+    val testedAtText: String = "从未测速",
 )
 
 data class ProfileNodeGroupItem(
