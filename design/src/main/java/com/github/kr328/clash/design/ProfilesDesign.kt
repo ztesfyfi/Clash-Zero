@@ -55,6 +55,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         data class EnableManagedNodeGroup(val id: String, val enabled: Boolean) : Request()
         data class DeleteManagedNodeGroup(val id: String) : Request()
         data class ReplaceManagedNodeGroupMembers(val id: String, val members: List<NodeGroupMember>) : Request()
+        data class RemoveManagedNodeGroupMember(val groupId: String, val profileUuid: java.util.UUID, val proxyKey: String) : Request()
         data class SetManagedNodeMembership(val groupId: String, val profileUuid: java.util.UUID, val proxyKey: String, val proxyName: String, val selected: Boolean) : Request()
         object Refresh : Request()
         object Create : Request()
@@ -508,23 +509,37 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
                 Triple(profile, node, NodeGroupMember(group.id, profile.uuid, node.key, node.originalName))
             }
         }
-        if (options.isEmpty()) {
+        val existing = managedNodeMembers[group.id].orEmpty()
+        val liveKeys = options.map { "${it.third.profileUuid}:${it.third.proxyKey}" }.toSet()
+        val stale = existing.filter { "${it.profileUuid}:${it.proxyKey}" !in liveKeys }
+        if (options.isEmpty() && stale.isEmpty()) {
             launch { showToast("当前没有可管理的订阅节点，请先更新订阅。", ToastDuration.Long) }
             return
         }
-        val selected = managedNodeMembers[group.id].orEmpty().map { "${it.profileUuid}:${it.proxyKey}" }.toSet()
+        val selected = existing.map { "${it.profileUuid}:${it.proxyKey}" }.toSet()
         val checked = BooleanArray(options.size) { index ->
             val member = options[index].third
             "${member.profileUuid}:${member.proxyKey}" in selected
         }
         val labels = options.map { (profile, node, _) -> "[${profile.name}] ${node.displayName}（${node.type}）" }.toTypedArray()
-        MaterialAlertDialogBuilder(context).setTitle("选择“${group.name}”的节点")
+        val builder = MaterialAlertDialogBuilder(context)
+            .setTitle("选择“${group.name}”的节点")
             .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton("保存成员") { _, _ ->
                 val members = options.mapIndexedNotNull { index, option -> if (checked[index]) option.third else null }
                 requests.trySend(Request.ReplaceManagedNodeGroupMembers(group.id, members))
-            }.show()
+            }
+        if (stale.isNotEmpty()) {
+            builder.setNeutralButton("清理失效成员（${stale.size}）") { _, _ ->
+                stale.forEach { member ->
+                    requests.trySend(Request.RemoveManagedNodeGroupMember(
+                        group.id, member.profileUuid, member.proxyKey
+                    ))
+                }
+            }
+        }
+        builder.show()
     }
 
     private fun showDelayThresholds() {
