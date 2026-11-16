@@ -119,18 +119,19 @@ object TargetSetRuleCompiler {
                     require(url.startsWith("https://", true) || url.startsWith("http://", true)) {
                         "规则集“${ruleSet.name}”必须使用 HTTP(S) URL"
                     }
-                    val cacheFile = File(profileDirectory, "rule-providers/$name")
-                    require(cacheFile.parentFile?.mkdirs() == true || cacheFile.parentFile?.isDirectory == true) {
-                        "无法创建规则集缓存目录：${cacheFile.parentFile}"
-                    }
-                    provider.put("url", url).put("path", cacheFile.absolutePath)
+                    provider.put("url", url).put("path", "rule-providers/$name")
                 }
                 RuleSet.SOURCE_FILE -> {
                     val source = File(ruleSet.sourceValue.trim())
                     require(source.isAbsolute && source.isFile && source.canRead()) {
                         "规则集“${ruleSet.name}”本地文件不存在或不可读取"
                     }
-                    provider.put("path", source.absolutePath)
+                    val managedFile = File(profileDirectory, "providers/rules/rule-providers/$name")
+                    require(managedFile.parentFile?.mkdirs() == true || managedFile.parentFile?.isDirectory == true) {
+                        "无法创建本地规则集目录：${managedFile.parentFile}"
+                    }
+                    source.copyTo(managedFile, overwrite = true)
+                    provider.put("path", "rule-providers/$name")
                 }
                 else -> error("规则集“${ruleSet.name}”使用了尚不支持的来源类型")
             }
