@@ -101,7 +101,7 @@ object TargetSetRuleCompiler {
         require(providerNames.values.distinct().size == providerNames.size) {
             "规则集生成的 Mihomo provider 名称发生冲突"
         }
-        val providerCacheDirectory = File(profileDirectory, "providers/rules/rule-providers")
+        val providerCacheDirectory = File(profileDirectory, "providers/rule-providers")
         if (providerNames.isNotEmpty()) {
             require(providerCacheDirectory.mkdirs() || providerCacheDirectory.isDirectory) {
                 "无法创建 Mihomo 规则集缓存目录：$providerCacheDirectory"
