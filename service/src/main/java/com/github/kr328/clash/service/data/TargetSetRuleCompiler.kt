@@ -28,6 +28,10 @@ object TargetSetRuleCompiler {
             compareBy<TargetSet> { it.sortOrder }.thenBy { it.createdAt }.thenBy { it.name }
         )
         val enabledRuleSets = ruleSets.filter { it.enabled }.associateBy { it.id }
+        val enabledIds = enabledSets.map { it.id }.toSet()
+        require(outboundByTargetSet.keys == enabledIds) {
+            "代理服务绑定必须且只能覆盖所有启用的目标集合"
+        }
         val providers = JSONObject()
         val rules = JSONArray()
         val providerNames = mutableMapOf<String, String>()
@@ -92,6 +96,9 @@ object TargetSetRuleCompiler {
             }
         }
 
+        require(providerNames.values.distinct().size == providerNames.size) {
+            "规则集生成的 Mihomo provider 名称发生冲突"
+        }
         for ((ruleSetId, name) in providerNames) {
             val ruleSet = enabledRuleSets[ruleSetId] ?: error("规则集不存在：$ruleSetId")
             val provider = JSONObject()
@@ -111,6 +118,9 @@ object TargetSetRuleCompiler {
                         "规则集“${ruleSet.name}”必须使用 HTTP(S) URL"
                     }
                     val cacheFile = File(profileDirectory, "rule-providers/$name")
+                    require(cacheFile.parentFile?.mkdirs() == true || cacheFile.parentFile?.isDirectory == true) {
+                        "无法创建规则集缓存目录：${cacheFile.parentFile}"
+                    }
                     provider.put("url", url).put("path", cacheFile.absolutePath)
                 }
                 RuleSet.SOURCE_FILE -> {
