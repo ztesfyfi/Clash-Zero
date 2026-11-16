@@ -283,6 +283,23 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
+                        is ProfilesDesign.Request.UpdateManagedDynamicNodeGroup -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val old = dao.queryById(it.id) ?: error("节点组不存在")
+                            require(old.mode == NodeGroup.MODE_NAME) { "只有订阅动态组可以修改动态筛选条件" }
+                            val sourceUuid = runCatching { UUID.fromString(it.nameTag) }.getOrNull()
+                                ?: error("动态组必须关联一个有效订阅")
+                            require(withProfile { queryByUUID(sourceUuid) }?.imported == true) { "关联订阅不存在或不可用" }
+                            val keyword = it.nameKeyword?.trim()?.takeIf { value -> value.isNotEmpty() }
+                            require(it.nameKeyword == null || keyword != null) { "筛选关键字不能为空" }
+                            dao.upsert(old.copy(
+                                nameTag = sourceUuid.toString(),
+                                nameKeyword = keyword,
+                                updatedAt = System.currentTimeMillis()
+                            ))
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
                         is ProfilesDesign.Request.EnableManagedNodeGroup -> withContext(Dispatchers.IO) {
                             val dao = Database.database.openNodeGroupDao()
                             val old = dao.queryById(it.id) ?: error("节点组不存在")
