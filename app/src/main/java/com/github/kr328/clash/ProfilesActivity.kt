@@ -348,26 +348,11 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         val settings = withContext(Dispatchers.IO) {
             val existing = dao.querySettings()
             if (existing == null || !existing.presetsInitialized) {
-                dao.insertGroups(
-                    listOf(
-                        ProfileNodeGroup("region-us", "美国", true, sortOrder = 10),
-                        ProfileNodeGroup("region-jp", "日本", true, sortOrder = 20),
-                        ProfileNodeGroup("region-sg", "新加坡", true, sortOrder = 30),
-                        ProfileNodeGroup("region-hk", "香港", true, sortOrder = 40),
-                        ProfileNodeGroup("region-tw", "台湾", true, sortOrder = 50),
-                        ProfileNodeGroup("region-kr", "韩国", true, sortOrder = 60),
-                        ProfileNodeGroup("region-gb", "英国", true, sortOrder = 70),
-                        ProfileNodeGroup("region-de", "德国", true, sortOrder = 80),
-                        ProfileNodeGroup("region-other", "其他", true, sortOrder = 90),
-                    )
-                )
                 val initialized = (existing ?: ProfileNodeSettings()).copy(presetsInitialized = true)
                 dao.upsertSettings(initialized)
                 initialized
             } else existing
         }
-        val groups = withContext(Dispatchers.IO) { dao.queryGroups() }
-        val groupById = groups.associateBy { it.id }
         val managedDao = Database.database.openNodeGroupDao()
         val managedGroups = withContext(Dispatchers.IO) { managedDao.queryAll() }
         val managedMembers = withContext(Dispatchers.IO) {
@@ -390,7 +375,6 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                 val overrides = dao.queryOverrides(profile.uuid).associateBy { it.nodeKey }
                 profile.uuid to rawNodes.map { node ->
                     val override = overrides[node.key]
-                    val group = override?.groupId?.let(groupById::get)
                     val delayMs = override?.delayMs
                     val testedAt = override?.testedAt
                     val goodThreshold = settings.goodThresholdMs
@@ -400,8 +384,6 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                         originalName = node.name,
                         displayName = override?.customName?.takeIf { it.isNotBlank() } ?: node.name,
                         type = node.type,
-                        groupId = group?.id,
-                        groupName = group?.name,
                         delayText = when {
                             delayMs != null -> "$delayMs ms"
                             testedAt != null -> override?.testError ?: "测速失败"
@@ -425,7 +407,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
         patchProfiles(
             profiles,
             nodeMap,
-            groups.map { ProfileNodeGroupItem(it.id, it.name, it.isPreset, it.enabled, it.sortOrder) },
+            emptyList(),
             nodeErrors,
             ProfileNodeSettingsItem(settings.goodThresholdMs, settings.slowThresholdMs),
             managedGroups,
