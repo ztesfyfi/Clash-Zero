@@ -14,7 +14,11 @@ object StrategyConfigCompiler {
     private const val PREFIX = "CZ-"
     private const val TEST_URL = "https://www.gstatic.com/generate_204"
 
-    suspend fun writeOverlay(context: Context, profileUuid: UUID) {
+    suspend fun writeOverlay(
+        context: Context,
+        profileUuid: UUID,
+        targetSetOutboundBindings: Map<String, String> = emptyMap(),
+    ) {
         val database = Database.database
         val nodeGroups = database.openNodeGroupDao().queryAll().filter { it.enabled }
         val strategies = database.openStrategyGroupDao().queryAll().filter { it.enabled }
@@ -188,9 +192,33 @@ object StrategyConfigCompiler {
             }
         }
 
+        val targetSets = database.openTargetSetDao().queryAll()
+        val targetProviders = JSONObject()
+        if (targetSetOutboundBindings.isNotEmpty()) {
+            val conditionsBySet = targetSets.associate { targetSet ->
+                targetSet.id to database.openTargetSetDao().queryConditions(targetSet.id)
+            }
+            val targetOutput = TargetSetRuleCompiler.compile(
+                targetSets = targetSets,
+                conditionsByTargetSet = conditionsBySet,
+                ruleSets = database.openRuleSetDao().queryAll(),
+                outboundByTargetSet = targetSetOutboundBindings,
+                profileDirectory = context.filesDir.resolve("imported").resolve(profileUuid.toString()),
+            )
+            for (key in targetOutput.providers.keys()) {
+                targetProviders.put(key, targetOutput.providers.getJSONObject(key))
+            }
+            for (index in 0 until targetOutput.rules.length()) {
+                rules.put(targetOutput.rules.getString(index))
+            }
+        }
+
         val overlay = JSONObject()
             .put("proxy-groups", proxyGroups)
             .put("rules", rules)
+        if (targetProviders.length() > 0) {
+            overlay.put("rule-providers", targetProviders)
+        }
         val directory = context.filesDir.resolve("imported").resolve(profileUuid.toString())
         require(directory.isDirectory) { "当前订阅配置目录不存在" }
         val destination = File(directory, "strategy.json")
