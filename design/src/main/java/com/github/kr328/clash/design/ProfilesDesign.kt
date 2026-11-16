@@ -228,7 +228,7 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         val group = node.groupName ?: "未分组"
         MaterialAlertDialogBuilder(context)
             .setTitle(node.displayName)
-            .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：${node.delayText}\n节点标识：${node.key}")
+            .setMessage("原始名称：${node.originalName}\n协议类型：${node.type}\n所属分组：${group}\n测速状态：${node.delayText}\n最近测速：${node.testedAtText}\n节点标识：${node.key}")
             .setPositiveButton("重命名") { _, _ -> showRenameNode(profile, node) }
             .setNegativeButton("分组") { _, _ -> showNodeGroupPicker(profile, node) }
             .setNeutralButton("测速") { _, _ -> requests.trySend(Request.TestNode(profile, node)) }
@@ -244,10 +244,21 @@ class ProfilesDesign(context: Context) : Design<ProfilesDesign.Request>(context)
         }
         MaterialAlertDialogBuilder(context)
             .setTitle("重命名节点")
+            .setMessage("自定义名称会独立保存，订阅更新后会继续保留。恢复原始名称不会影响节点测速记录和节点标识。")
             .setView(input)
             .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton("恢复原始名称") { _, _ ->
+                requests.trySend(Request.RenameNode(profile, node, node.originalName))
+            }
             .setPositiveButton(R.string.ok) { _, _ ->
-                requests.trySend(Request.RenameNode(profile, node, input.text.toString().trim()))
+                val name = input.text.toString().trim()
+                if (name.isBlank()) {
+                    launch {
+                        showToast("节点名称不能为空；如需恢复原名，请使用“恢复原始名称”。", ToastDuration.Long)
+                    }
+                } else {
+                    requests.trySend(Request.RenameNode(profile, node, name))
+                }
             }
             .show()
     }

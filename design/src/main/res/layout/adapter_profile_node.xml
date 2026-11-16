@@ -31,5 +31,12 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:textAppearance="@style/TextAppearance.MaterialComponents.Caption" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:text='@{"最近测速：" + node.testedAtText}'
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
 </layout>
