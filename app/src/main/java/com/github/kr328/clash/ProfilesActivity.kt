@@ -363,6 +363,14 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.fetch()
                             design.showNodeGroupManager()
                         }
+                        is ProfilesDesign.Request.RemoveManagedNodeGroupMember -> withContext(Dispatchers.IO) {
+                            val dao = Database.database.openNodeGroupDao()
+                            val group = dao.queryById(it.groupId) ?: error("节点组不存在")
+                            require(group.mode == NodeGroup.MODE_STATIC) { "只有静态组可以清理成员" }
+                            dao.removeMember(it.groupId, it.profileUuid, it.proxyKey)
+                            design.fetch()
+                            design.showNodeGroupManager()
+                        }
                         is ProfilesDesign.Request.SetManagedNodeMembership -> withContext(Dispatchers.IO) {
                             val dao = Database.database.openNodeGroupDao()
                             val group = dao.queryById(it.groupId) ?: error("节点组不存在")
