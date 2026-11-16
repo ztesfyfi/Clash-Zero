@@ -11,6 +11,7 @@ data class ProfileNodeItem(
     val delayState: String = "UNTESTED",
     val testedAtText: String = "从未测速",
     val exitIpText: String = "未查询",
+    val exitCountryCode: String? = null,
     val exitLocationText: String = "归属地未知",
     val ipCheckedAtText: String = "从未查询",
     val groupNamesText: String = "未加入节点组",
