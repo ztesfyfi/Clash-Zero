@@ -63,7 +63,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                 design.showToast("请先启用这个订阅，再进行测速。", ToastDuration.Long)
                             } else {
                                 try {
-                                    withContext(Dispatchers.IO) {
+                                    val summary = withContext(Dispatchers.IO) {
                                         val dao = Database.database.openProfileNodeDao()
                                         val profileNodes = Clash.queryProfileProxies(importedDir.resolve(it.profile.uuid.toString()))
                                         if (profileNodes.isEmpty()) throw IllegalStateException("这个订阅没有可测速节点")
@@ -81,6 +81,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                         }
                                         val oldOverrides = dao.queryOverrides(it.profile.uuid).associateBy { value -> value.nodeKey }
                                         val now = System.currentTimeMillis()
+                                        var successCount = 0
                                         results.forEach { (node, outcome) ->
                                             val old = oldOverrides[node.key]
                                             val tested = outcome.getOrNull()
@@ -88,6 +89,7 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                             val error = outcome.exceptionOrNull()?.message
                                                 ?: tested?.error
                                                 ?: if (delay == null) "测速失败" else null
+                                            if (delay != null && error == null) successCount++
                                             dao.upsertOverride(
                                                 ProfileNodeOverride(
                                                     profileUuid = it.profile.uuid,
@@ -101,9 +103,13 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                                 )
                                             )
                                         }
+                                        successCount to profileNodes.size
                                     }
                                     design.fetch()
-                                    design.showToast("订阅节点测速完成。", ToastDuration.Long)
+                                    design.showToast(
+                                        "订阅测速完成：成功 ${summary.first} 个，失败 ${summary.second - summary.first} 个，共 ${summary.second} 个节点。",
+                                        ToastDuration.Long
+                                    )
                                 } catch (error: Exception) {
                                     design.showToast("测速失败：${error.message ?: "未知错误"}", ToastDuration.Long)
                                 }
