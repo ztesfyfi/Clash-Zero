@@ -38,5 +38,19 @@
             android:text='@{"最近测速：" + node.testedAtText}'
             android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
             android:textColor="?android:attr/textColorSecondary" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:text='@{"出口 IP：" + node.exitIpText + " · " + node.exitLocationText}'
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:text='@{"最近查询：" + node.ipCheckedAtText}'
+            android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
 </layout>

@@ -99,7 +99,13 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                                     groupId = old?.groupId,
                                                     delayMs = delay,
                                                     testedAt = now,
-                                                    testError = error
+                                                    testError = error,
+                                                    exitIp = old?.exitIp,
+                                                    exitCountry = old?.exitCountry,
+                                                    exitRegion = old?.exitRegion,
+                                                    exitCity = old?.exitCity,
+                                                    ipCheckedAt = old?.ipCheckedAt,
+                                                    ipCheckError = old?.ipCheckError
                                                 )
                                             )
                                         }
@@ -136,7 +142,13 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                                 groupId = old?.groupId,
                                                 delayMs = delay,
                                                 testedAt = System.currentTimeMillis(),
-                                                testError = tested.error ?: if (delay == null) "测速失败" else null
+                                                testError = tested.error ?: if (delay == null) "测速失败" else null,
+                                                exitIp = old?.exitIp,
+                                                exitCountry = old?.exitCountry,
+                                                exitRegion = old?.exitRegion,
+                                                exitCity = old?.exitCity,
+                                                ipCheckedAt = old?.ipCheckedAt,
+                                                ipCheckError = old?.ipCheckError
                                             )
                                         )
                                     }
@@ -175,7 +187,13 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                                             old?.groupId,
                                             old?.delayMs,
                                             old?.testedAt,
-                                            old?.testError
+                                            old?.testError,
+                                            old?.exitIp,
+                                            old?.exitCountry,
+                                            old?.exitRegion,
+                                            old?.exitCity,
+                                            old?.ipCheckedAt,
+                                            old?.ipCheckError
                                         )
                                     )
                                 }
@@ -351,6 +369,12 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             else -> "TESTED"
                         },
                         testedAtText = testedAt?.let { android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString() } ?: "从未测速",
+                        exitIpText = override?.exitIp ?: "未查询",
+                        exitLocationText = listOfNotNull(override?.exitCountry, override?.exitRegion, override?.exitCity)
+                            .filter { it.isNotBlank() }.joinToString(" ").ifBlank { "归属地未知" },
+                        ipCheckedAtText = override?.ipCheckedAt?.let {
+                            android.text.format.DateFormat.format("yyyy-MM-dd HH:mm", it).toString()
+                        } ?: "从未查询",
                     )
                 }
             }
