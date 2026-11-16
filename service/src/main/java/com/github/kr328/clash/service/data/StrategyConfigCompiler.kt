@@ -75,7 +75,12 @@ object StrategyConfigCompiler {
                 .put("type", "select")
             when (group.mode) {
                 NodeGroup.MODE_STATIC -> json.put("proxies", JSONArray(staticMembers[group.id].orEmpty()))
-                NodeGroup.MODE_NAME -> json.put("include-all", true)
+                NodeGroup.MODE_NAME -> {
+                    json.put("include-all", true)
+                    group.nameKeyword?.takeIf { it.isNotBlank() }?.let { keyword ->
+                        json.put("filter", "(?i).*" + Regex.escape(keyword) + ".*")
+                    }
+                }
             }
             proxyGroups.put(json)
         }
