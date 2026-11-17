@@ -166,6 +166,8 @@ class StrategyManagerActivity : AppCompatActivity() {
                     else -> {
                         val targetSets = database.openTargetSetDao().queryAll()
                         val ruleSets = database.openRuleSetDao().queryAll()
+                        val services = database.openProxyServiceDao().queryAll().associateBy { it.id }
+                        val bindings = database.openProxyServiceDao().queryAllTargetBindings().associateBy { it.targetSetId }
                         if (targetSets.isEmpty()) emptyHint("还没有目标集合，点击右上角新建。")
                         targetSets.forEach { targetSet ->
                             val conditions = database.openTargetSetDao().queryConditions(targetSet.id)
@@ -176,7 +178,14 @@ class StrategyManagerActivity : AppCompatActivity() {
                                 "${condition.matcherType}: $ruleSetName"
                             }
                             val mode = if (targetSet.matchMode == TargetSet.MATCH_ALL) "全部匹配（AND）" else "任一匹配（OR）"
-                            addRow(targetSet.name, "$mode · ${conditions.size} 条规则 · ${matcherSummary.ifBlank { "尚未配置规则" }}", targetSet.enabled) {
+                            val service = bindings[targetSet.id]?.let { services[it.serviceId] }
+                            val bindingText = when {
+                                bindings[targetSet.id] == null -> "未绑定代理服务"
+                                service == null -> "代理服务不存在"
+                                !service.enabled -> "代理服务已停用：${service.name}"
+                                else -> "代理服务：${service.name}"
+                            }
+                            addRow(targetSet.name, "$mode · ${conditions.size} 条规则 · $bindingText · ${matcherSummary.ifBlank { "尚未配置规则" }}", targetSet.enabled) {
                                 showTargetSetActions(targetSet)
                             }
                         }
