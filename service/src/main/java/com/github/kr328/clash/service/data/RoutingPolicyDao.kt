@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 
 @Dao
 interface RoutingPolicyDao {
@@ -15,11 +16,21 @@ interface RoutingPolicyDao {
     suspend fun queryById(id: String): RoutingPolicy?
 
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAll(policies: List<RoutingPolicy>)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(policy: RoutingPolicy)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(policy: RoutingPolicy)
+    @Update
+    suspend fun update(policy: RoutingPolicy)
+
+    @Transaction
+    suspend fun upsert(policy: RoutingPolicy) {
+        if (queryById(policy.id) == null) insert(policy) else update(policy)
+    }
+
+    @Transaction
+    suspend fun upsertAll(policies: List<RoutingPolicy>) {
+        policies.forEach { upsert(it) }
+    }
 
     @Query("DELETE FROM routing_policies WHERE id = :id")
     suspend fun delete(id: String)
