@@ -61,13 +61,13 @@ object StrategyConfigCompiler {
                 Clash.queryProfileProxies(sourceDirectory).associateBy { it.key }
             }
         }
-        fun sourceOverrides(sourceUuid: UUID): Map<String, ProfileNodeOverride> {
+        suspend fun sourceOverrides(sourceUuid: UUID): Map<String, ProfileNodeOverride> {
             return profileOverrideCache.getOrPut(sourceUuid) {
                 database.openProfileNodeDao().queryOverrides(sourceUuid).associateBy { it.nodeKey }
             }
         }
         val subscriptionNameCache = mutableMapOf<UUID, String>()
-        fun externalProxyName(sourceUuid: UUID, key: String, displayName: String): String {
+        suspend fun externalProxyName(sourceUuid: UUID, key: String, displayName: String): String {
             val subscriptionName = subscriptionNameCache.getOrPut(sourceUuid) {
                 database.openImportedDao().queryByUUID(sourceUuid)?.name ?: sourceUuid.toString().take(8)
             }
