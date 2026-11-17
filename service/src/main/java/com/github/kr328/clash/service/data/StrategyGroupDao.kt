@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 
 @Dao
 interface StrategyGroupDao {
@@ -15,11 +16,21 @@ interface StrategyGroupDao {
     suspend fun queryById(id: String): StrategyGroup?
 
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertAll(groups: List<StrategyGroup>)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(group: StrategyGroup)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(group: StrategyGroup)
+    @Update
+    suspend fun update(group: StrategyGroup)
+
+    @Transaction
+    suspend fun upsert(group: StrategyGroup) {
+        if (queryById(group.id) == null) insert(group) else update(group)
+    }
+
+    @Transaction
+    suspend fun upsertAll(groups: List<StrategyGroup>) {
+        groups.forEach { upsert(it) }
+    }
 
     @Query("DELETE FROM strategy_groups WHERE id = :id")
     suspend fun delete(id: String)
