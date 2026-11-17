@@ -1,6 +1,7 @@
 package com.github.kr328.clash.service.data
 
 import android.content.Context
+import com.github.kr328.clash.core.Clash
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -42,11 +43,42 @@ object StrategyConfigCompiler {
         val graphError = StrategyGraphValidator.validate(strategyIds, nodeGroupIds, references)
         require(graphError == null) { graphError ?: "代理策略引用无效" }
 
+        val importedRoot = context.filesDir.resolve("imported")
+        val profileProxyCache = mutableMapOf<UUID, Map<String, com.github.kr328.clash.core.model.ProfileProxy>>()
+        val externalProxyDefinitions = JSONArray()
+        val externalProxyAliases = mutableMapOf<String, String>()
+        fun sourceNodes(sourceUuid: UUID): Map<String, com.github.kr328.clash.core.model.ProfileProxy> {
+            return profileProxyCache.getOrPut(sourceUuid) {
+                val sourceDirectory = importedRoot.resolve(sourceUuid.toString())
+                require(sourceDirectory.isDirectory) { "节点组引用的订阅不存在或尚未导入：" + sourceUuid }
+                Clash.queryProfileProxies(sourceDirectory).associateBy { it.key }
+            }
+        }
+        fun externalProxyName(sourceUuid: UUID, key: String, displayName: String): String {
+            val safeName = displayName.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(36)
+            return "CZ-EXT-" + sourceUuid.toString().replace("-", "").take(8) +
+                "-" + key.take(8) + "-" + safeName
+        }
         val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC }.associate { group ->
-            group.id to database.openNodeGroupDao().queryMembers(group.id)
-                .filter { it.profileUuid == profileUuid }
-                .map { it.proxyName }
-                .distinct()
+            val resolvedNames = database.openNodeGroupDao().queryMembers(group.id).mapNotNull { member ->
+                val sourceNode = sourceNodes(member.profileUuid)[member.proxyKey] ?: return@mapNotNull null
+                if (member.profileUuid == profileUuid) {
+                    sourceNode.name
+                } else {
+                    val identity = member.profileUuid.toString() + ":" + member.proxyKey
+                    externalProxyAliases.getOrPut(identity) {
+                        val alias = externalProxyName(member.profileUuid, member.proxyKey, sourceNode.name)
+                        externalProxyDefinitions.put(
+                            JSONObject()
+                                .put("profileUuid", member.profileUuid.toString())
+                                .put("key", member.proxyKey)
+                                .put("name", alias)
+                        )
+                        alias
+                    }
+                }
+            }.distinct()
+            group.id to resolvedNames
         }
         // Only successful, timestamped lookups for this exact subscription qualify.
         val verifiedOverrides = database.openProfileNodeDao().queryOverrides(profileUuid)
@@ -245,6 +277,7 @@ object StrategyConfigCompiler {
 
         val overlay = JSONObject()
             .put("proxy-groups", proxyGroups)
+            .put("external-proxies", externalProxyDefinitions)
             .put("rules", rules)
         if (targetProviders.length() > 0) {
             overlay.put("rule-providers", targetProviders)
