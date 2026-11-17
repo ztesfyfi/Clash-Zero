@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"regexp"
+	"strings"
 
 	"github.com/metacubex/mihomo/common/yaml"
 	mihomoConfig "github.com/metacubex/mihomo/config"
