@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 
 @Dao
 interface ProxyServiceDao {
@@ -14,8 +15,11 @@ interface ProxyServiceDao {
     @Query("SELECT * FROM proxy_services WHERE id = :id")
     suspend fun queryById(id: String): ProxyService?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(service: ProxyService)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(service: ProxyService)
+
+    @Update
+    suspend fun update(service: ProxyService)
 
     @Query("DELETE FROM proxy_services WHERE id = :id")
     suspend fun delete(id: String)
@@ -44,7 +48,7 @@ interface ProxyServiceDao {
         nodeGroupIds: List<String>,
         targetSetIds: List<String>,
     ) {
-        upsert(service)
+        if (queryById(service.id) == null) insert(service) else update(service)
         clearNodeGroups(service.id)
         clearTargetSets(service.id)
 
