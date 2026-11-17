@@ -595,9 +595,13 @@ class StrategyManagerActivity : AppCompatActivity() {
                     0 -> showNodeGroupEditor(group)
                     1 -> scope.launch {
                         val serviceRefs = database.openProxyServiceDao().queryServicesForNodeGroup(group.id)
-                        val activeService = serviceRefs.firstOrNull { database.openProxyServiceDao().queryById(it.serviceId)?.enabled == true }
-                        if (group.enabled && activeService != null) {
-                            toast("该节点组仍被启用的代理服务引用，请先修改代理服务")
+                        val activeService = serviceRefs.any { database.openProxyServiceDao().queryById(it.serviceId)?.enabled == true }
+                        val strategyRefs = database.openStrategyGroupDao().queryParents(
+                            StrategyGroupMember.TYPE_NODE_GROUP, group.id
+                        )
+                        val activeStrategy = strategyRefs.any { database.openStrategyGroupDao().queryById(it.groupId)?.enabled == true }
+                        if (group.enabled && (activeService || activeStrategy)) {
+                            toast("该节点组仍被启用的代理服务或代理策略引用，请先修改引用关系")
                         } else {
                             database.openNodeGroupDao().upsert(group.copy(enabled = !group.enabled, updatedAt = System.currentTimeMillis()))
                             refresh(apply = true)
