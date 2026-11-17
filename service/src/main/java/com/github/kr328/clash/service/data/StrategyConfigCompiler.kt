@@ -51,6 +51,7 @@ object StrategyConfigCompiler {
 
         val importedRoot = context.filesDir.resolve("imported")
         val profileProxyCache = mutableMapOf<UUID, Map<String, com.github.kr328.clash.core.model.ProfileProxy>>()
+        val profileOverrideCache = mutableMapOf<UUID, Map<String, ProfileNodeOverride>>()
         val externalProxyDefinitions = JSONArray()
         val externalProxyAliases = mutableMapOf<String, String>()
         fun sourceNodes(sourceUuid: UUID): Map<String, com.github.kr328.clash.core.model.ProfileProxy> {
@@ -60,20 +61,27 @@ object StrategyConfigCompiler {
                 Clash.queryProfileProxies(sourceDirectory).associateBy { it.key }
             }
         }
+        fun sourceOverrides(sourceUuid: UUID): Map<String, ProfileNodeOverride> {
+            return profileOverrideCache.getOrPut(sourceUuid) {
+                database.openProfileNodeDao().queryOverrides(sourceUuid).associateBy { it.nodeKey }
+            }
+        }
         fun externalProxyName(sourceUuid: UUID, key: String, displayName: String): String {
-            val safeName = displayName.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(36)
+            val safeName = displayName.replace(Regex("[,\\r\\n]"), "_").take(36)
             return "CZ-EXT-" + sourceUuid.toString().replace("-", "").take(8) +
                 "-" + key.take(8) + "-" + safeName
         }
         val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC && it.id in referencedNodeGroupIds }.associate { group ->
             val resolvedNames = database.openNodeGroupDao().queryMembers(group.id).mapNotNull { member ->
                 val sourceNode = sourceNodes(member.profileUuid)[member.proxyKey] ?: return@mapNotNull null
-                if (member.profileUuid == profileUuid) {
+                val displayName = sourceOverrides(member.profileUuid)[member.proxyKey]
+                    ?.customName?.takeIf { it.isNotBlank() } ?: sourceNode.name
+                if (member.profileUuid == profileUuid && displayName == sourceNode.name) {
                     sourceNode.name
                 } else {
                     val identity = member.profileUuid.toString() + ":" + member.proxyKey
                     externalProxyAliases.getOrPut(identity) {
-                        val alias = externalProxyName(member.profileUuid, member.proxyKey, sourceNode.name)
+                        val alias = externalProxyName(member.profileUuid, member.proxyKey, displayName)
                         externalProxyDefinitions.put(
                             JSONObject()
                                 .put("profileUuid", member.profileUuid.toString())
