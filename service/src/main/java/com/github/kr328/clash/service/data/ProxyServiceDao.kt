@@ -17,5 +17,5 @@ import androidx.room.*
   targetSetIds.distinct().forEach { id -> addTargetSet(ProxyServiceTargetSet(id,service.id)) }
  }
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun addNodeGroup(member:ProxyServiceNodeGroup)
- @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun addTargetSet(binding:ProxyServiceTargetSet)
+ @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun addTargetSet(binding:ProxyServiceTargetSet)
 }
