@@ -18,8 +18,16 @@ interface NodeGroupDao {
     @Query("SELECT * FROM node_groups WHERE id = :id")
     suspend fun queryById(id: String): NodeGroup?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(group: NodeGroup)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(group: NodeGroup)
+
+    @Update
+    suspend fun update(group: NodeGroup)
+
+    @Transaction
+    suspend fun upsert(group: NodeGroup) {
+        if (queryById(group.id) == null) insert(group) else update(group)
+    }
 
     @Query("DELETE FROM node_groups WHERE id = :id")
     suspend fun delete(id: String)
