@@ -66,30 +66,30 @@ object StrategyConfigCompiler {
                 database.openProfileNodeDao().queryOverrides(sourceUuid).associateBy { it.nodeKey }
             }
         }
+        val subscriptionNameCache = mutableMapOf<UUID, String>()
         fun externalProxyName(sourceUuid: UUID, key: String, displayName: String): String {
-            val safeName = displayName.replace(Regex("[,\\r\\n]"), "_").take(36)
-            return "CZ-EXT-" + sourceUuid.toString().replace("-", "").take(8) +
-                "-" + key.take(8) + "-" + safeName
+            val subscriptionName = subscriptionNameCache.getOrPut(sourceUuid) {
+                database.openImportedDao().queryByUUID(sourceUuid)?.name ?: sourceUuid.toString().take(8)
+            }
+            val safeName = (subscriptionName + "-" + displayName)
+                .replace(Regex("[,\\r\\n]"), "_").take(48)
+            return "CZ-NODE-" + safeName + "-" + key.take(8)
         }
         val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC && it.id in referencedNodeGroupIds }.associate { group ->
             val resolvedNames = database.openNodeGroupDao().queryMembers(group.id).mapNotNull { member ->
                 val sourceNode = sourceNodes(member.profileUuid)[member.proxyKey] ?: return@mapNotNull null
                 val displayName = sourceOverrides(member.profileUuid)[member.proxyKey]
                     ?.customName?.takeIf { it.isNotBlank() } ?: sourceNode.name
-                if (member.profileUuid == profileUuid && displayName == sourceNode.name) {
-                    sourceNode.name
-                } else {
-                    val identity = member.profileUuid.toString() + ":" + member.proxyKey
-                    externalProxyAliases.getOrPut(identity) {
-                        val alias = externalProxyName(member.profileUuid, member.proxyKey, displayName)
-                        externalProxyDefinitions.put(
-                            JSONObject()
-                                .put("profileUuid", member.profileUuid.toString())
-                                .put("key", member.proxyKey)
-                                .put("name", alias)
-                        )
-                        alias
-                    }
+                val identity = member.profileUuid.toString() + ":" + member.proxyKey
+                externalProxyAliases.getOrPut(identity) {
+                    val alias = externalProxyName(member.profileUuid, member.proxyKey, displayName)
+                    externalProxyDefinitions.put(
+                        JSONObject()
+                            .put("profileUuid", member.profileUuid.toString())
+                            .put("key", member.proxyKey)
+                            .put("name", alias)
+                    )
+                    alias
                 }
             }.distinct()
             group.id to resolvedNames
