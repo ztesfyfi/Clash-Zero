@@ -207,7 +207,7 @@ class StrategyManagerActivity : AppCompatActivity() {
                         val active = bindings.any { database.openTargetSetDao().queryById(it.targetSetId)?.enabled == true }
                         if (service.enabled && active) toast("该服务仍绑定启用的目标集合，请先停用或重新绑定集合")
                         else {
-                            database.openProxyServiceDao().upsert(service.copy(enabled = !service.enabled))
+                            database.openProxyServiceDao().update(service.copy(enabled = !service.enabled, updatedAt = System.currentTimeMillis()))
                             refresh(apply = true)
                         }
                     }
