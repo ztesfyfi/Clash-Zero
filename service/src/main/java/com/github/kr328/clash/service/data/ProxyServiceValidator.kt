@@ -11,6 +11,10 @@ object ProxyServiceValidator {
    if(members.isEmpty()) return "代理服务“${s.name}”没有选择节点组"
    if(members.map { it.nodeGroupId }.distinct().size!=members.size) return "代理服务“${s.name}”重复选择节点组"
    for(m in members) { val g=groupMap[m.nodeGroupId] ?: return "代理服务“${s.name}”引用了不存在的节点组"; if(!g.enabled) return "代理服务“${s.name}”引用了已停用的节点组“${g.name}”" }
+   if (s.mode == ProxyService.MODE_LOAD_BALANCE) {
+    val regions = members.mapNotNull { groupMap[it.nodeGroupId]?.regionCode?.uppercase() }.distinct()
+    if (regions.size > 1) return "代理服务“" + s.name + "”的负载均衡节点组包含多个已标记地区"
+   }
   }
   val owners=mutableMapOf<String,String>()
   for(b in bindings) {
