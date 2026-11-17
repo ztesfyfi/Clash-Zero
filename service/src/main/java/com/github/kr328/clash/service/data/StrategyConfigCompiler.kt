@@ -75,23 +75,45 @@ object StrategyConfigCompiler {
                 .replace(Regex("[,\\r\\n]"), "_").take(48)
             return "CZ-NODE-" + safeName + "-" + key.take(8)
         }
+        suspend fun proxyAlias(sourceUuid: UUID, key: String, displayName: String): String {
+            val identity = sourceUuid.toString() + ":" + key
+            return externalProxyAliases.getOrPut(identity) {
+                val alias = externalProxyName(sourceUuid, key, displayName)
+                externalProxyDefinitions.put(
+                    JSONObject()
+                        .put("profileUuid", sourceUuid.toString())
+                        .put("key", key)
+                        .put("name", alias)
+                )
+                alias
+            }
+        }
         val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC && it.id in referencedNodeGroupIds }.associate { group ->
             val resolvedNames = database.openNodeGroupDao().queryMembers(group.id).mapNotNull { member ->
                 val sourceNode = sourceNodes(member.profileUuid)[member.proxyKey] ?: return@mapNotNull null
                 val displayName = sourceOverrides(member.profileUuid)[member.proxyKey]
                     ?.customName?.takeIf { it.isNotBlank() } ?: sourceNode.name
-                val identity = member.profileUuid.toString() + ":" + member.proxyKey
-                externalProxyAliases.getOrPut(identity) {
-                    val alias = externalProxyName(member.profileUuid, member.proxyKey, displayName)
-                    externalProxyDefinitions.put(
-                        JSONObject()
-                            .put("profileUuid", member.profileUuid.toString())
-                            .put("key", member.proxyKey)
-                            .put("name", alias)
-                    )
-                    alias
-                }
+                proxyAlias(member.profileUuid, member.proxyKey, displayName)
             }.distinct()
+            group.id to resolvedNames
+        }
+        // NAME groups materialize the selected subscription's current nodes.
+        // This supports both whole-subscription groups and keyword-filtered groups,
+        // regardless of which subscription is currently active.
+        val dynamicMembers = nodeGroups.filter {
+            it.mode == NodeGroup.MODE_NAME && it.id in referencedNodeGroupIds
+        }.associate { group ->
+            val sourceUuid = runCatching { UUID.fromString(group.nameTag) }.getOrNull()
+                ?: error("动态节点组“" + group.name + "”没有关联有效订阅")
+            val keyword = group.nameKeyword?.takeIf { it.isNotBlank() }
+            val resolvedNames = sourceNodes(sourceUuid).values
+                .filter { keyword == null || it.name.contains(keyword, ignoreCase = true) }
+                .map { node ->
+                    val displayName = sourceOverrides(sourceUuid)[node.key]
+                        ?.customName?.takeIf { it.isNotBlank() } ?: node.name
+                    proxyAlias(sourceUuid, node.key, displayName)
+                }
+                .distinct()
             group.id to resolvedNames
         }
         // Only successful, timestamped lookups for this exact subscription qualify.
@@ -119,7 +141,7 @@ object StrategyConfigCompiler {
             group.id in referencedNodeGroupIds &&
                 when (group.mode) {
                     NodeGroup.MODE_STATIC -> staticMembers[group.id].orEmpty().isNotEmpty()
-                    NodeGroup.MODE_NAME -> group.nameTag == profileUuid.toString()
+                    NodeGroup.MODE_NAME -> dynamicMembers[group.id].orEmpty().isNotEmpty()
                     NodeGroup.MODE_NAME_REGION -> group.nameTag == profileUuid.toString() &&
                         regionMembers[group.id].orEmpty().isNotEmpty()
                     else -> false
@@ -153,12 +175,7 @@ object StrategyConfigCompiler {
                 .put("type", "select")
             when (group.mode) {
                 NodeGroup.MODE_STATIC -> json.put("proxies", JSONArray(staticMembers[group.id].orEmpty()))
-                NodeGroup.MODE_NAME -> {
-                    json.put("include-all", true)
-                    group.nameKeyword?.takeIf { it.isNotBlank() }?.let { keyword ->
-                        json.put("filter", "(?i).*" + Regex.escape(keyword) + ".*")
-                    }
-                }
+                NodeGroup.MODE_NAME -> json.put("proxies", JSONArray(dynamicMembers[group.id].orEmpty()))
                 NodeGroup.MODE_NAME_REGION -> {
                     val members = regionMembers[group.id].orEmpty()
                     require(members.isNotEmpty()) {
