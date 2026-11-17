@@ -24,14 +24,16 @@ object TargetSetRuleCompiler {
         outboundByTargetSet: Map<String, String>,
         profileDirectory: File,
     ): Output {
-        val enabledSets = targetSets.filter { it.enabled }.sortedWith(
+        val enabledIds = targetSets.filter { it.enabled }.map { it.id }.toSet()
+        require(outboundByTargetSet.keys.all { it in enabledIds }) {
+            "代理服务绑定了不存在或已停用的目标集合"
+        }
+        // An enabled target set may intentionally remain unbound after a service
+        // is deleted. Keep it editable, but do not emit a route without an outbound.
+        val enabledSets = targetSets.filter { it.enabled && it.id in outboundByTargetSet }.sortedWith(
             compareBy<TargetSet> { it.sortOrder }.thenBy { it.createdAt }.thenBy { it.name }
         )
         val enabledRuleSets = ruleSets.filter { it.enabled }.associateBy { it.id }
-        val enabledIds = enabledSets.map { it.id }.toSet()
-        require(outboundByTargetSet.keys == enabledIds) {
-            "代理服务绑定必须且只能覆盖所有启用的目标集合"
-        }
         val providers = JSONObject()
         val rules = JSONArray()
         val providerNames = mutableMapOf<String, String>()
