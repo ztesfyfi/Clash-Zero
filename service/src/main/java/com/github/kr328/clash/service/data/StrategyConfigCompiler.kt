@@ -103,7 +103,7 @@ object StrategyConfigCompiler {
         val dynamicMembers = nodeGroups.filter {
             it.mode == NodeGroup.MODE_NAME && it.id in referencedNodeGroupIds
         }.associate { group ->
-            val sourceUuid = runCatching { UUID.fromString(group.nameTag) }.getOrNull()
+            val sourceUuid = runCatching { UUID.fromString(group.nameTag ?: "") }.getOrNull()
                 ?: error("动态节点组“" + group.name + "”没有关联有效订阅")
             val keyword = group.nameKeyword?.takeIf { it.isNotBlank() }
             val resolvedNames = sourceNodes(sourceUuid).values
