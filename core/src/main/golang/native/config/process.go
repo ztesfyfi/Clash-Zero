@@ -137,12 +137,62 @@ func patchStrategy(cfg *config.RawConfig, profileDir string) error {
 	}
 
 	var overlay struct {
-		ProxyGroups  []map[string]any            `json:"proxy-groups"`
-		RuleProviders map[string]map[string]any `json:"rule-providers"`
-		Rules        []string                    `json:"rules"`
+		ProxyGroups   []map[string]any           `json:"proxy-groups"`
+		RuleProviders map[string]map[string]any  `json:"rule-providers"`
+		Rules         []string                   `json:"rules"`
+		ExternalProxies []struct {
+			ProfileUUID string `json:"profileUuid"`
+			Key         string `json:"key"`
+			Name        string `json:"name"`
+		} `json:"external-proxies"`
 	}
 	if err := json.Unmarshal(data, &overlay); err != nil {
 		return fmt.Errorf("decode generated strategy overlay: %w", err)
+	}
+
+	// Import only explicitly selected nodes from other subscriptions. The
+	// stable key is calculated from each source profile's normalized proxy
+	// definition, so display-name changes do not silently select another node.
+	if len(overlay.ExternalProxies) > 0 {
+		requests := make(map[string][]string)
+		aliases := make(map[string]string)
+		existingNames := make(map[string]struct{}, len(cfg.Proxy))
+		for _, proxy := range cfg.Proxy {
+			if name, ok := proxy["name"].(string); ok && name != "" {
+				existingNames[name] = struct{}{}
+			}
+		}
+		for _, item := range overlay.ExternalProxies {
+			if len(item.ProfileUUID) != 36 || item.Key == "" || item.Name == "" {
+				return fmt.Errorf("invalid external proxy reference")
+			}
+			if _, exists := existingNames[item.Name]; exists {
+				return fmt.Errorf("external proxy name %q conflicts with an existing proxy", item.Name)
+			}
+			if _, exists := aliases[item.Name]; exists {
+				return fmt.Errorf("duplicate external proxy alias %q", item.Name)
+			}
+			aliases[item.Name] = item.ProfileUUID + ":" + item.Key
+			requests[item.ProfileUUID] = append(requests[item.ProfileUUID], item.Key)
+		}
+		for profileUUID, keys := range requests {
+			sourceDir := filepath.Join(filepath.Dir(profileDir), profileUUID)
+			definitions, err := QueryProfileProxyDefinitions(sourceDir, keys)
+			if err != nil {
+				return fmt.Errorf("load selected nodes from subscription %s: %w", profileUUID, err)
+			}
+			for _, item := range overlay.ExternalProxies {
+				if item.ProfileUUID != profileUUID {
+					continue
+				}
+				proxy, ok := definitions[item.Key]
+				if !ok {
+					return fmt.Errorf("selected proxy %q is no longer available in subscription %s", item.Name, profileUUID)
+				}
+				proxy["name"] = item.Name
+				cfg.Proxy = append(cfg.Proxy, proxy)
+			}
+		}
 	}
 
 	cfg.ProxyGroup = append(cfg.ProxyGroup, overlay.ProxyGroups...)
