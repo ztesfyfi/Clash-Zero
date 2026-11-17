@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"regexp"
 
 	"github.com/metacubex/mihomo/common/yaml"
+	mihomoConfig "github.com/metacubex/mihomo/config"
 )
 
 type ProfileProxy struct {
@@ -53,8 +55,23 @@ type proxyProviderFile struct {
 	Proxies []map[string]any `yaml:"proxies"`
 }
 
+func unmarshalProfileProxyConfig(profilePath string) (*mihomoConfig.RawConfig, error) {
+	data, err := os.ReadFile(filepath.Join(profilePath, "config.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	raw, err := mihomoConfig.UnmarshalRawConfig(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := patchProviders(raw, profilePath); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
-	raw, err := UnmarshalAndPatch(profilePath)
+	raw, err := unmarshalProfileProxyConfig(profilePath)
 	if err != nil {
 		return nil, fmt.Errorf("parse profile config: %w", err)
 	}
@@ -147,7 +164,7 @@ func QueryProfileProxies(profilePath string) ([]ProfileProxy, error) {
 // stable profile proxy keys. It is used to import selected nodes from another
 // subscription into the active profile's generated configuration.
 func QueryProfileProxyDefinitions(profilePath string, requestedKeys []string) (map[string]map[string]any, error) {
-	raw, err := UnmarshalAndPatch(profilePath)
+	raw, err := unmarshalProfileProxyConfig(profilePath)
 	if err != nil {
 		return nil, fmt.Errorf("parse source profile config: %w", err)
 	}
