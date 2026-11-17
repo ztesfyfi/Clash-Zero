@@ -594,15 +594,24 @@ class StrategyManagerActivity : AppCompatActivity() {
                 when (which) {
                     0 -> showNodeGroupEditor(group)
                     1 -> scope.launch {
-                        database.openNodeGroupDao().upsert(group.copy(enabled = !group.enabled, updatedAt = System.currentTimeMillis()))
-                        refresh(apply = true)
+                        val serviceRefs = database.openProxyServiceDao().queryServicesForNodeGroup(group.id)
+                        val activeService = serviceRefs.firstOrNull { database.openProxyServiceDao().queryById(it.serviceId)?.enabled == true }
+                        if (group.enabled && activeService != null) {
+                            toast("该节点组仍被启用的代理服务引用，请先修改代理服务")
+                        } else {
+                            database.openNodeGroupDao().upsert(group.copy(enabled = !group.enabled, updatedAt = System.currentTimeMillis()))
+                            refresh(apply = true)
+                        }
                     }
                     2 -> scope.launch {
                         val usedBy = database.openStrategyGroupDao().queryParents(
                             StrategyGroupMember.TYPE_NODE_GROUP, group.id
                         )
+                        val serviceRefs = database.openProxyServiceDao().queryServicesForNodeGroup(group.id)
                         if (usedBy.isNotEmpty()) {
-                            toast("该节点组仍被策略组引用，请先从策略组成员中移除")
+                            toast("该节点组仍被代理策略引用，请先从代理策略成员中移除")
+                        } else if (serviceRefs.isNotEmpty()) {
+                            toast("该节点组仍被代理服务引用，请先从代理服务中移除")
                         } else {
                             database.openNodeGroupDao().delete(group.id)
                             refresh(apply = true)
