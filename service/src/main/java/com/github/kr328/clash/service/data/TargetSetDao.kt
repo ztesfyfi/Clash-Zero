@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 
 @Dao
 interface TargetSetDao {
@@ -14,8 +15,16 @@ interface TargetSetDao {
     @Query("SELECT * FROM target_sets WHERE id = :id")
     suspend fun queryById(id: String): TargetSet?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(targetSet: TargetSet)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(targetSet: TargetSet)
+
+    @Update
+    suspend fun update(targetSet: TargetSet)
+
+    @Transaction
+    suspend fun upsert(targetSet: TargetSet) {
+        if (queryById(targetSet.id) == null) insert(targetSet) else update(targetSet)
+    }
 
     @Query("UPDATE target_sets SET enabled = :enabled, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setEnabled(id: String, enabled: Boolean, updatedAt: Long = System.currentTimeMillis())
