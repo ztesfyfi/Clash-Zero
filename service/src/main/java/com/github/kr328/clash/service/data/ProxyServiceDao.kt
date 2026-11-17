@@ -6,6 +6,7 @@ import androidx.room.*
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun upsert(service:ProxyService)
  @Query("DELETE FROM proxy_services WHERE id=:id") suspend fun delete(id:String)
  @Query("SELECT * FROM proxy_service_node_groups WHERE serviceId=:serviceId ORDER BY position") suspend fun queryNodeGroups(serviceId:String):List<ProxyServiceNodeGroup>
+ @Query("SELECT * FROM proxy_service_node_groups WHERE nodeGroupId=:nodeGroupId") suspend fun queryServicesForNodeGroup(nodeGroupId:String):List<ProxyServiceNodeGroup>
  @Query("SELECT * FROM proxy_service_target_sets WHERE serviceId=:serviceId") suspend fun queryTargetSets(serviceId:String):List<ProxyServiceTargetSet>
  @Query("SELECT * FROM proxy_service_target_sets") suspend fun queryAllTargetBindings():List<ProxyServiceTargetSet>
  @Query("DELETE FROM proxy_service_node_groups WHERE serviceId=:serviceId") suspend fun clearNodeGroups(serviceId:String)
