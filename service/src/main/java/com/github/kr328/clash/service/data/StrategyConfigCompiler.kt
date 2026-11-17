@@ -37,6 +37,12 @@ object StrategyConfigCompiler {
         val strategyMembers = strategies.associate { group ->
             group.id to database.openStrategyGroupDao().queryMembers(group.id)
         }
+        val referencedNodeGroupIds = (
+            strategyMembers.values.flatten()
+                .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
+                .map { it.memberId } +
+            serviceNodeMembers.values.flatten().map { it.nodeGroupId }
+        ).toSet()
         val references = strategyMembers.flatMap { (groupId, members) ->
             members.map { StrategyGraphValidator.Reference(groupId, it.memberType, it.memberId) }
         }
@@ -59,7 +65,7 @@ object StrategyConfigCompiler {
             return "CZ-EXT-" + sourceUuid.toString().replace("-", "").take(8) +
                 "-" + key.take(8) + "-" + safeName
         }
-        val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC }.associate { group ->
+        val staticMembers = nodeGroups.filter { it.mode == NodeGroup.MODE_STATIC && it.id in referencedNodeGroupIds }.associate { group ->
             val resolvedNames = database.openNodeGroupDao().queryMembers(group.id).mapNotNull { member ->
                 val sourceNode = sourceNodes(member.profileUuid)[member.proxyKey] ?: return@mapNotNull null
                 if (member.profileUuid == profileUuid) {
@@ -92,12 +98,6 @@ object StrategyConfigCompiler {
                 .map { it.originalName }
                 .distinct()
         }
-        val referencedNodeGroupIds = (
-            strategyMembers.values.flatten()
-                .filter { it.memberType == StrategyGroupMember.TYPE_NODE_GROUP }
-                .map { it.memberId } +
-            serviceNodeMembers.values.flatten().map { it.nodeGroupId }
-        ).toSet()
         nodeGroups.filter {
             it.id in referencedNodeGroupIds &&
                 it.mode == NodeGroup.MODE_NAME_REGION &&
