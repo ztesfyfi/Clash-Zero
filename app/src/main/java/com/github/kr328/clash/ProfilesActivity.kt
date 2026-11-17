@@ -322,14 +322,42 @@ class ProfilesActivity : BaseActivity<ProfilesDesign>() {
                             design.showNodeGroupManager()
                         }
                         is ProfilesDesign.Request.EnableManagedNodeGroup -> withContext(Dispatchers.IO) {
-                            val dao = Database.database.openNodeGroupDao()
+                            val database = Database.database
+                            val dao = database.openNodeGroupDao()
                             val old = dao.queryById(it.id) ?: error("节点组不存在")
-                            dao.upsert(old.copy(enabled = it.enabled, updatedAt = System.currentTimeMillis()))
+                            if (!it.enabled) {
+                                val serviceRefs = database.openProxyServiceDao().queryServicesForNodeGroup(it.id)
+                                val activeService = serviceRefs.any {
+                                    database.openProxyServiceDao().queryById(it.serviceId)?.enabled == true
+                                }
+                                val strategyRefs = database.openStrategyGroupDao().queryParents(
+                                    com.github.kr328.clash.service.data.StrategyGroupMember.TYPE_NODE_GROUP, it.id
+                                )
+                                val activeStrategy = strategyRefs.any {
+                                    database.openStrategyGroupDao().queryById(it.groupId)?.enabled == true
+                                }
+                                if (activeService || activeStrategy) {
+                                    design.showToast("该节点组仍被启用的代理服务或代理策略引用，请先修改引用关系。", ToastDuration.Long)
+                                } else {
+                                    dao.upsert(old.copy(enabled = false, updatedAt = System.currentTimeMillis()))
+                                }
+                            } else {
+                                dao.upsert(old.copy(enabled = true, updatedAt = System.currentTimeMillis()))
+                            }
                             design.fetch()
                             design.showNodeGroupManager()
                         }
                         is ProfilesDesign.Request.DeleteManagedNodeGroup -> withContext(Dispatchers.IO) {
-                            Database.database.openNodeGroupDao().delete(it.id)
+                            val database = Database.database
+                            val serviceRefs = database.openProxyServiceDao().queryServicesForNodeGroup(it.id)
+                            val strategyRefs = database.openStrategyGroupDao().queryParents(
+                                com.github.kr328.clash.service.data.StrategyGroupMember.TYPE_NODE_GROUP, it.id
+                            )
+                            if (serviceRefs.isNotEmpty() || strategyRefs.isNotEmpty()) {
+                                design.showToast("该节点组仍被代理服务或代理策略引用，请先移除引用。", ToastDuration.Long)
+                            } else {
+                                database.openNodeGroupDao().delete(it.id)
+                            }
                             design.fetch()
                             design.showNodeGroupManager()
                         }
