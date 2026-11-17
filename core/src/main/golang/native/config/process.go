@@ -189,6 +189,7 @@ func patchStrategy(cfg *config.RawConfig, profileDir string) error {
 				if !ok {
 					return fmt.Errorf("selected proxy %q is no longer available in subscription %s", item.Name, profileUUID)
 				}
+				proxy = cloneProxy(proxy)
 				proxy["name"] = item.Name
 				cfg.Proxy = append(cfg.Proxy, proxy)
 			}
