@@ -221,9 +221,9 @@ object StrategyConfigCompiler {
         val targetProviders = JSONObject()
         val targetRules = JSONArray()
         val enabledTargetSetIds = targetSets.filter { it.enabled }.map { it.id }.toSet()
-        val outboundByTargetSet = serviceTargetBindings.filter { it.targetSetId in enabledTargetSetIds }.associate { binding ->
-            binding.targetSetId to (serviceNames[binding.serviceId] ?: error("目标集合绑定了不存在或已停用的代理服务"))
-        }
+        val outboundByTargetSet = serviceTargetBindings
+            .filter { it.targetSetId in enabledTargetSetIds && it.serviceId in serviceNames }
+            .associate { binding -> binding.targetSetId to serviceNames.getValue(binding.serviceId) }
         val validationError = ProxyServiceValidator.validate(allProxyServices, nodeGroups, targetSets, serviceNodeMembers, serviceTargetBindings)
         require(validationError == null) { validationError ?: "代理服务配置无效" }
         require(targetSetOutboundBindings.isEmpty() || targetSetOutboundBindings == outboundByTargetSet) { "目标集合出口绑定由代理服务统一管理" }
